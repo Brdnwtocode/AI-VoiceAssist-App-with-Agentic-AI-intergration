@@ -420,7 +420,13 @@ async def call_nlu_mock(request: Request, context_type: str, context_data: dict)
 
     if tool == "update_note":
         if context_type != "NOTE":
-            raise HTTPException(status_code=400, detail="X-Mock-Tool not valid for NOTE context")
+            allow = (request.headers.get("x-mock-hallucinate-update-note") or "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            if not allow:
+                raise HTTPException(status_code=400, detail="X-Mock-Tool not valid for NOTE context")
         validated = UpdateNoteParams.model_validate(arguments)
         return {"action": "update_note", "params": validated.model_dump(), "reply": None}
     if tool == "add_stack_row":
@@ -556,6 +562,22 @@ async def process_voice(
 
     action = nlu_result["action"]
     conv_reply = nlu_result.get("reply")
+
+    # AI PIPELINE BOUNDARY: Belt-and-suspenders guard against LLM hallucination.
+    # run_resolver() already rejects cross-context actions, but if that guard is
+    # ever bypassed, this is the last line of defense before a NoneType crash.
+    if action == "update_note" and note_data is None:
+        action = "none"
+        conv_reply = "I cannot update a note because no note is currently open."
+        nlu_result["action"] = "none"
+        nlu_result["reply"] = conv_reply
+
+    if action == "add_stack_row" and not dynamic_schema:
+        action = "none"
+        conv_reply = "I cannot add a row because no stack schema is available."
+        nlu_result["action"] = "none"
+        nlu_result["reply"] = conv_reply
+
     payload: Dict[str, Any] = {
         "transcript": transcript,
         "action": action,

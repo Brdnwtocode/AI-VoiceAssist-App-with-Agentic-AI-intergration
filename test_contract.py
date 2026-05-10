@@ -236,6 +236,39 @@ def test_none_action(audio_path: str, client: httpx.Client) -> None:
     assert body["message"] == "No action recognized from command"
 
 
+def test_hallucinated_update_note(audio_path: str, client: httpx.Client) -> None:
+    """Verify the server does not crash when the LLM hallucinates update_note in STACK context."""
+    schema = [{"id": "col1", "name": "Task", "type": "TEXT"}]
+    headers = _mock_headers(
+        "Add a task called review.",
+        "update_note",  # hallucinated — wrong tool for STACK context
+        {"content_to_insert": "review", "action_type": "append"},
+    )
+    headers["X-Mock-Hallucinate-Update-Note"] = "1"
+    with open(audio_path, "rb") as f:
+        files = {"audio": ("t.webm", f, "audio/webm")}
+        data = {
+            "context_type": "STACK",
+            "context_id": STACK_ID,
+            "dynamic_schema": json.dumps(schema),
+            # note_state intentionally absent — STACK context, no open note
+        }
+        r = client.post(
+            f"{SERVICE_URL}/api/v1/voice/process",
+            files=files,
+            data=data,
+            headers=headers,
+            timeout=60.0,
+        )
+    # Must not 500. Must gracefully return none with a conversational reply.
+    assert r.status_code == 200, f"Expected 200, got {r.status_code}: {r.text}"
+    body = r.json()
+    assert body["success"] is True
+    assert body["action"] == "none"
+    assert body["updatedData"] is None
+    assert body["reply"] is not None and len(body["reply"]) > 0
+
+
 def test_invalid_audio_mime(audio_path: str, client: httpx.Client) -> None:
     note = _note_state()
     headers = _mock_headers("x", "no_action", {})
@@ -393,6 +426,9 @@ def run_tests(use_mock: bool) -> int:
                 tests.append(("note_insert_cursor", lambda: test_note_insert_at_cursor(audio_path, client)))
                 tests.append(("stack_add_row", lambda: test_stack_add_row(audio_path, client)))
                 tests.append(("none_action", lambda: test_none_action(audio_path, client)))
+                tests.append(
+                    ("hallucinated_update_note", lambda: test_hallucinated_update_note(audio_path, client)),
+                )
 
             tests.append(("invalid_mime", lambda: test_invalid_audio_mime(audio_path, client)))
             tests.append(("missing_note_state", lambda: test_missing_note_state(audio_path, client)))

@@ -5,3 +5,4 @@ pydantic
 deepgram-sdk>=3.0,<5
 groq>=0.13,<1
 litellm>=1.83.7
+python-dotenv>=1.0,<2

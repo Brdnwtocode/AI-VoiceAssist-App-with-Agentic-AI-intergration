@@ -5,19 +5,19 @@ import logging
 import os
 import time
 import uuid
+import yaml
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any, Dict, List, Literal, Optional, Type
 from uuid import UUID
 
 import litellm
-from deepgram import DeepgramClient, FileSource, PrerecordedOptions
+from litellm import Router
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from groq import AsyncGroq
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model, field_validator
 
 load_dotenv()
@@ -33,13 +33,46 @@ ALLOWED_MIME_TYPES = {"audio/webm", "audio/mp3"}
 RESOLVER_PRIMARY = "gemini/gemini-2.5-flash"
 RESOLVER_FALLBACK = "groq/llama-3.3-70b-versatile"
 SENTINEL_MODEL = "groq/llama-3.1-8b-instant"
-LLM_TIMEOUT = 60.0
-STT_DEEPGRAM_TIMEOUT_SEC = 2.0
+LLM_TIMEOUT = 30.0
 
 MOCK_OPENAI = os.getenv("MOCK_OPENAI", "").strip().lower() in ("1", "true", "yes")
 
-_groq_key = os.getenv("GROQ_API_KEY") or ""
-groq_client = AsyncGroq(api_key=_groq_key or "gsk-placeholder-invalid-until-set")
+router = Router(model_list=[
+    {
+        "model_name": "sentinel",
+        "litellm_params": {
+            "model": "groq/llama-3.1-8b-instant"
+        }
+    },
+    {
+        "model_name": "resolver",
+        "litellm_params": {
+            "model": "gemini/gemini-2.5-flash",
+            "fallbacks": ["groq/llama-3.3-70b-versatile"]
+        }
+    },
+    {
+        "model_name": "groq/llama-3.3-70b-versatile",
+        "litellm_params": {
+            "model": "groq/llama-3.3-70b-versatile"
+        }
+    },
+    {
+        "model_name": "stt-router",
+        "litellm_params": {
+            "model": "deepgram/nova-2",
+            "api_key": os.environ.get("DEEPGRAM_API_KEY"),
+            "timeout": 2.5
+        }
+    },
+    {
+        "model_name": "stt-router",
+        "litellm_params": {
+            "model": "groq/whisper-large-v3",
+            "api_key": os.environ.get("GROQ_API_KEY")
+        }
+    }
+])
 
 app = FastAPI(title="Voice AI Microservice", version="1.0.0")
 
@@ -360,50 +393,18 @@ def parse_context_uuid(context_id: str) -> None:
         raise HTTPException(status_code=400, detail="Invalid context_id UUID")
 
 
-def _deepgram_transcribe_sync(audio_bytes: bytes) -> str:
-    api_key = os.getenv("DEEPGRAM_API_KEY") or ""
-    if not api_key:
-        raise RuntimeError("DEEPGRAM_API_KEY is not set")
-
-    dg = DeepgramClient(api_key)
-    payload: FileSource = {"buffer": audio_bytes}
-    options = PrerecordedOptions(model="nova-2", language="vi")
-    resp = dg.listen.rest.v("1").transcribe_file(payload, options)
+async def transcribe_audio(audio_filename: str, audio_file, audio_content_type: str) -> str:
     try:
-        alt = resp.results.channels[0].alternatives[0]
-        return (getattr(alt, "transcript", None) or "").strip()
-    except (AttributeError, IndexError, TypeError) as exc:
-        raise RuntimeError(f"Unexpected Deepgram response: {exc}") from exc
-
-
-async def transcribe_audio(audio_bytes: bytes) -> str:
-    try:
-        text_dg = await asyncio.wait_for(
-            asyncio.to_thread(_deepgram_transcribe_sync, audio_bytes),
-            timeout=STT_DEEPGRAM_TIMEOUT_SEC,
+        # Pass the file tuple exactly as LiteLLM/OpenAI expects
+        file_tuple = (audio_filename, audio_file, audio_content_type)
+        response = await router.atranscription(
+            model="stt-router",
+            file=file_tuple,
+            language="vi"
         )
-        return text_dg
-    except asyncio.TimeoutError:
-        error_details = f"timed out after {STT_DEEPGRAM_TIMEOUT_SEC} seconds"
-        logger.warning(f"[STT] Deepgram failed: {error_details}. Falling back to Groq.")
-    except Exception as exc:
-        error_details = str(exc)
-        logger.warning(f"[STT] Deepgram failed: {error_details}. Falling back to Groq.")
-
-    try:
-        groq_result = await groq_client.audio.transcriptions.create(
-            file=("audio.webm", audio_bytes),
-            model="whisper-large-v3",
-            language="vi",
-        )
-        return (getattr(groq_result, "text", None) or "").strip()
-    except Exception as exc:
-        error_details = str(exc)
-        logger.error(f"[STT] Groq fallback failed: {error_details}")
-        raise HTTPException(
-            status_code=502,
-            detail="Both Deepgram and Groq STT services failed",
-        ) from exc
+        return response.text
+    except Exception as e:
+        raise HTTPException(status_code=502, detail="Both Deepgram and Groq STT services failed")
 
 
 async def call_nlu_mock(request: Request, context_type: str, context_data: dict) -> dict:
@@ -546,7 +547,7 @@ async def process_voice(
                 detail="Mock mode requires X-Mock-Transcript header",
             )
     else:
-        transcript = await transcribe_audio(contents)
+        transcript = await transcribe_audio(audio.filename, audio.file, audio.content_type)
 
     context_data: Dict[str, Any] = {
         "context_type": context_type,

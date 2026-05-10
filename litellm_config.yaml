@@ -9,3 +9,12 @@ model_list:
   - model_name: groq/llama-3.3-70b-versatile
     litellm_params:
       model: groq/llama-3.3-70b-versatile
+  - model_name: stt-router
+    litellm_params:
+      model: deepgram/nova-2
+      api_key: os.environ/DEEPGRAM_API_KEY
+      timeout: 2.5
+  - model_name: stt-router
+    litellm_params:
+      model: groq/whisper-large-v3
+      api_key: os.environ/GROQ_API_KEY

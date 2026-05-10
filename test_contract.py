@@ -52,14 +52,18 @@ def _mock_headers(transcript: str, tool: str, args: Optional[Dict[str, Any]] = N
 
 
 def assert_success_contract(body: Dict[str, Any]) -> None:
-    for key in ("transcript", "action", "success", "message", "updatedData"):
+    for key in ("transcript", "action", "success", "message", "updatedData", "reply"):
         assert key in body, f"missing key {key}: {body!r}"
     assert isinstance(body["transcript"], str)
     assert isinstance(body["action"], str)
     assert body["success"] is True
-    assert isinstance(body["message"], str)
+    assert body["message"] is None or isinstance(body["message"], str)
     ud = body["updatedData"]
     assert ud is None or isinstance(ud, dict)
+    assert body["reply"] is None or isinstance(body["reply"], str)
+    assert not (ud is not None and body["reply"] is not None), (
+        "updatedData and reply must not both be set"
+    )
 
 
 def assert_error_response(resp: httpx.Response, expected_status: int) -> None:
@@ -85,13 +89,13 @@ def test_health(use_mock: bool, client: httpx.Client) -> None:
     if use_mock:
         assert r.status_code == 200, r.text
         body = r.json()
-        assert body == {"status": "ok", "openai": "connected"}, body
+        assert body == {"status": "ok", "api": "connected"}, body
     else:
         assert r.status_code in (200, 503)
         body = r.json()
         assert "status" in body
         if r.status_code == 200:
-            assert body.get("openai") == "connected"
+            assert body.get("api") == "connected"
 
 
 def test_note_update_append(audio_path: str, client: httpx.Client) -> None:
@@ -125,7 +129,9 @@ def test_note_update_append(audio_path: str, client: httpx.Client) -> None:
     assert ud is not None
     for k in ("id", "title", "content", "createdAt", "updatedAt"):
         assert k in ud
+    assert "userId" not in ud
     assert ud["id"] == NOTE_ID
+    assert body.get("reply") is None
     expected = note["content"] + "\n" + "Meeting notes from today"
     assert ud["content"] == expected
 
@@ -266,7 +272,11 @@ def test_missing_note_state(audio_path: str, client: httpx.Client) -> None:
             headers=headers,
             timeout=60.0,
         )
-    assert_error_response(r, 400)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert_success_contract(body)
+    assert body["action"] == "none"
+    assert body["updatedData"] is None
 
 
 def test_missing_context_type(audio_path: str, client: httpx.Client) -> None:

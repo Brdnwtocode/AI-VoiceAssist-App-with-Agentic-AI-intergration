@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice AI Service Tester</title>
+<style>
+* {
+    margin: 0;
+padding: 0;
+box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+min-height: 100vh;
+padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+margin: 0 auto;
+background: white;
+border-radius: 16px;
+box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+overflow: hidden;
+}
+
+.header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+color: white;
+padding: 30px;
+text-align: center;
+}
+
+.header h1 {
+    font-size: 2rem;
+margin-bottom: 10px;
+}
+
+.header p {
+    opacity: 0.9;
+}
+
+.content {
+    display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 20px;
+padding: 30px;
+}
+
+@media (max-width: 768px) {
+.content {
+    grid-template-columns: 1fr;
+}
+}
+
+.panel {
+    background: #f8f9fa;
+        border-radius: 12px;
+padding: 20px;
+border: 2px solid #e9ecef;
+}
+
+.panel h2 {
+    color: #495057;
+        margin-bottom: 15px;
+font-size: 1.2rem;
+border-bottom: 2px solid #667eea;
+padding-bottom: 10px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+label {
+    display: block;
+margin-bottom: 5px;
+color: #495057;
+font-weight: 500;
+font-size: 0.9rem;
+}
+
+select, input, textarea {
+    width: 100%;
+padding: 10px;
+border: 2px solid #dee2e6;
+border-radius: 8px;
+font-size: 0.9rem;
+transition: border-color 0.3s;
+}
+
+select:focus, input:focus, textarea:focus {
+    outline: none;
+border-color: #667eea;
+}
+
+textarea {
+    min-height: 80px;
+resize: vertical;
+font-family: 'Courier New', monospace;
+font-size: 0.85rem;
+}
+
+.push-to-talk-container {
+    text-align: center;
+margin: 20px 0;
+}
+
+.push-to-talk-btn {
+    width: 120px;
+height: 120px;
+border-radius: 50%;
+border: none;
+background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+color: white;
+font-size: 1rem;
+font-weight: 600;
+cursor: pointer;
+transition: all 0.3s;
+box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+display: flex;
+align-items: center;
+justify-content: center;
+margin: 0 auto;
+user-select: none;
+}
+
+.push-to-talk-btn:hover {
+    transform: scale(1.05);
+box-shadow: 0 15px 40px rgba(102, 126, 234, 0.6);
+}
+
+.push-to-talk-btn:active,
+.push-to-talk-btn.recording {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+transform: scale(0.95);
+box-shadow: 0 5px 20px rgba(220, 53, 69, 0.6);
+}
+
+.recording-indicator {
+    display: none;
+align-items: center;
+justify-content: center;
+gap: 10px;
+margin-top: 15px;
+color: #dc3545;
+font-weight: 600;
+}
+
+.recording-indicator.active {
+    display: flex;
+}
+
+.pulse-dot {
+    width: 12px;
+height: 12px;
+background: #dc3545;
+border-radius: 50%;
+animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+50% { opacity: 0.3; }
+}
+
+.btn {
+    padding: 12px 24px;
+border: none;
+border-radius: 8px;
+font-size: 1rem;
+font-weight: 600;
+cursor: pointer;
+transition: all 0.3s;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+    background: #6c757d;
+        color: white;
+}
+
+.btn-secondary:hover {
+                         background: #5a6268;
+                     }
+
+                     .data-display {
+    background: #212529;
+        color: #00ff00;
+padding: 15px;
+border-radius: 8px;
+font-family: 'Courier New', monospace;
+font-size: 0.85rem;
+max-height: 400px;
+overflow-y: auto;
+white-space: pre-wrap;
+word-break: break-all;
+}
+
+.status-badge {
+display: inline-block;
+padding: 5px 15px;
+border-radius: 20px;
+font-size: 0.85rem;
+font-weight: 600;
+margin-bottom: 10px;
+}
+
+.status-success {
+background: #d4edda;
+color: #155724;
+}
+
+.status-error {
+background: #f8d7da;
+color: #721c24;
+}
+
+.status-info {
+background: #d1ecf1;
+color: #0c5460;
+}
+
+.section {
+margin-bottom: 20px;
+}
+
+.button-group {
+display: flex;
+gap: 10px;
+margin-top: 15px;
+}
+
+.full-width {
+grid-column: 1 / -1;
+}
+
+.audio-player {
+margin-top: 15px;
+width: 100%;
+}
+</style>
+  </head>
+    <body>
+    <div class="container">
+<div class="header">
+<h1>🎙️ Voice AI Service Tester</h1>
+<p>Manual testing interface for FastAPI Voice Service</p>
+</div>
+
+<div class="content">
+<!-- Left Panel: Controls -->
+<div class="panel">
+<h2>📋 Request Configuration</h2>
+
+<div class="form-group">
+<label for="contextType">Context Type:</label>
+<select id="contextType" onchange="updateContextFields()">
+<option value="NOTE">NOTE</option>
+<option value="STACK">STACK</option>
+<option value="TASK">TASK</option>
+<option value="CALENDAR">CALENDAR</option>
+</select>
+</div>
+
+<div class="form-group">
+<label for="contextId">Context ID (UUID):</label>
+<input type="text" id="contextId" placeholder="e.g., 550e8400-e29b-41d4-a716-446655440000" value="550e8400-e29b-41d4-a716-446655440000">
+</div>
+
+<div class="form-group">
+<label for="cursorPosition">Cursor Position:</label>
+<input type="number" id="cursorPosition" value="0" min="0">
+</div>
+
+<div class="form-group" id="noteStateGroup">
+<label for="noteState">Note State (JSON):</label>
+<textarea id="noteState" placeholder='{"content": "# My Note\n\nContent here..."}'></textarea>
+</div>
+
+<div class="form-group" id="dynamicSchemaGroup" style="display: none;">
+<label for="dynamicSchema">Dynamic Schema (JSON):</label>
+<textarea id="dynamicSchema" placeholder='[{"id": "col1", "name": "Task", "type": "text"}, {"id": "col2", "name": "Status", "type": "text"}]'></textarea>
+</div>
+
+<div class="form-group" id="taskContextGroup" style="display: none;">
+<label for="taskContext">Task Context (JSON):</label>
+<textarea id="taskContext" placeholder='{"title": "Task name", "status": "TODO"}'></textarea>
+</div>
+
+<div class="push-to-talk-container">
+<button class="push-to-talk-btn" id="pushToTalkBtn">
+🎙️ HOLD TO TALK
+</button>
+<div class="recording-indicator" id="recordingIndicator">
+<div class="pulse-dot"></div>
+<span>Recording...</span>
+</div>
+</div>
+
+<div class="audio-player" id="audioPlayerContainer" style="display: none;">
+<label>Recorded Audio:</label>
+<audio id="audioPlayer" controls></audio>
+</div>
+
+<div class="button-group">
+<button class="btn btn-secondary" onclick="clearAll()">Clear All</button>
+<button class="btn btn-primary" onclick="sendRequest()" id="sendBtn" disabled>Send Request</button>
+</div>
+</div>
+
+<!-- Right Panel: Data Display -->
+<div class="panel">
+<h2>📊 Response Data</h2>
+
+<div class="section">
+<span class="status-badge status-info" id="statusBadge">Ready</span>
+</div>
+
+<div class="section">
+<h3 style="color: #495057; margin-bottom: 10px; font-size: 1rem;">Request Payload:</h3>
+<div class="data-display" id="requestPayload">{}</div>
+</div>
+
+<div class="section">
+<h3 style="color: #495057; margin-bottom: 10px; font-size: 1rem;">API Response:</h3>
+<div class="data-display" id="apiResponse">{}</div>
+</div>
+
+<div class="section full-width">
+<h3 style="color: #495057; margin-bottom: 10px; font-size: 1rem;">📤 Data for NextJS (Simulated):</h3>
+<div class="data-display" id="nextjsData">{}</div>
+</div>
+</div>
+</div>
+</div>
+
+<script>
+let mediaRecorder;
+let audioChunks = [];
+let audioBlob;
+let isRecording = false;
+
+const pushToTalkBtn = document.getElementById('pushToTalkBtn');
+const recordingIndicator = document.getElementById('recordingIndicator');
+const audioPlayerContainer = document.getElementById('audioPlayerContainer');
+const audioPlayer = document.getElementById('audioPlayer');
+const sendBtn = document.getElementById('sendBtn');
+
+// Push to Talk handlers
+pushToTalkBtn.addEventListener('mousedown', startRecording);
+pushToTalkBtn.addEventListener('mouseup', stopRecording);
+pushToTalkBtn.addEventListener('mouseleave', stopRecording);
+pushToTalkBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+startRecording();
+});
+pushToTalkBtn.addEventListener('touchend', (e) => {
+    e.preventDefault();
+stopRecording();
+});
+
+async function startRecording() {
+if (isRecording) return;
+
+try {
+const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+audioChunks = [];
+
+mediaRecorder.ondataavailable = (event) => {
+if (event.data.size > 0) {
+    audioChunks.push(event.data);
+}
+};
+
+mediaRecorder.onstop = () => {
+    audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+const audioUrl = URL.createObjectURL(audioBlob);
+audioPlayer.src = audioUrl;
+audioPlayerContainer.style.display = 'block';
+sendBtn.disabled = false;
+stream.getTracks().forEach(track => track.stop());
+};
+
+mediaRecorder.start();
+isRecording = true;
+pushToTalkBtn.classList.add('recording');
+pushToTalkBtn.textContent = '🔴 RELEASE TO STOP';
+recordingIndicator.classList.add('active');
+} catch (error) {
+    alert('Error accessing microphone: ' + error.message);
+}
+}
+
+function stopRecording() {
+if (!isRecording || !mediaRecorder) return;
+
+mediaRecorder.stop();
+isRecording = false;
+pushToTalkBtn.classList.remove('recording');
+pushToTalkBtn.textContent = '🎙️ HOLD TO TALK';
+recordingIndicator.classList.remove('active');
+}
+
+function updateContextFields() {
+const contextType = document.getElementById('contextType').value;
+document.getElementById('noteStateGroup').style.display = contextType === 'NOTE' ? 'block' : 'none';
+document.getElementById('dynamicSchemaGroup').style.display = contextType === 'STACK' ? 'block' : 'none';
+document.getElementById('taskContextGroup').style.display = contextType === 'TASK' ? 'block' : 'none';
+}
+
+function getRequestPayload() {
+const contextType = document.getElementById('contextType').value;
+const payload = {
+    context_type: contextType,
+    context_id: document.getElementById('contextId').value,
+    cursor_position: parseInt(document.getElementById('cursorPosition').value) || 0,
+};
+
+if (contextType === 'NOTE') {
+const noteState = document.getElementById('noteState').value;
+if (noteState) {
+try {
+payload.note_state = JSON.parse(noteState);
+} catch (e) {
+payload.note_state = noteState;
+}
+}
+} else if (contextType === 'STACK') {
+const dynamicSchema = document.getElementById('dynamicSchema').value;
+if (dynamicSchema) {
+try {
+payload.dynamic_schema = JSON.parse(dynamicSchema);
+} catch (e) {
+payload.dynamic_schema = dynamicSchema;
+}
+}
+} else if (contextType === 'TASK') {
+const taskContext = document.getElementById('taskContext').value;
+if (taskContext) {
+try {
+payload.task_context = JSON.parse(taskContext);
+} catch (e) {
+payload.task_context = taskContext;
+}
+}
+}
+
+return payload;
+}
+
+function simulateNextJSData(apiResponse) {
+if (!apiResponse) return {};
+
+const nextjsData = {
+    action: apiResponse.action,
+    transcript: apiResponse.transcript,
+    reply: apiResponse.reply,
+    success: apiResponse.success,
+    message: apiResponse.message,
+    timestamp: new Date().toISOString(),
+};
+
+if (apiResponse.updatedData) {
+nextjsData.updatedData = apiResponse.updatedData;
+}
+
+return nextjsData;
+}
+
+async function sendRequest() {
+if (!audioBlob) {
+alert('Please record audio first!');
+return;
+}
+
+const statusBadge = document.getElementById('statusBadge');
+const requestPayloadDiv = document.getElementById('requestPayload');
+const apiResponseDiv = document.getElementById('apiResponse');
+const nextjsDataDiv = document.getElementById('nextjsData');
+
+statusBadge.className = 'status-badge status-info';
+statusBadge.textContent = 'Sending...';
+
+const formData = new FormData();
+formData.append('audio', audioBlob, 'audio.webm');
+formData.append('context_type', document.getElementById('contextType').value);
+formData.append('context_id', document.getElementById('contextId').value);
+formData.append('cursor_position', document.getElementById('cursorPosition').value);
+
+const contextType = document.getElementById('contextType').value;
+if (contextType === 'NOTE') {
+const noteState = document.getElementById('noteState').value;
+if (noteState) formData.append('note_state', noteState);
+} else if (contextType === 'STACK') {
+const dynamicSchema = document.getElementById('dynamicSchema').value;
+if (dynamicSchema) formData.append('dynamic_schema', dynamicSchema);
+} else if (contextType === 'TASK') {
+const taskContext = document.getElementById('taskContext').value;
+if (taskContext) formData.append('task_context', taskContext);
+}
+
+const requestPayload = getRequestPayload();
+requestPayloadDiv.textContent = JSON.stringify(requestPayload, null, 2);
+
+try {
+const response = await fetch('http://localhost:8000/api/v1/voice/process', {
+method: 'POST',
+body: formData,
+});
+
+const data = await response.json();
+
+if (response.ok) {
+    statusBadge.className = 'status-badge status-success';
+statusBadge.textContent = 'Success';
+} else {
+    statusBadge.className = 'status-badge status-error';
+statusBadge.textContent = 'Error: ' + response.status;
+}
+
+apiResponseDiv.textContent = JSON.stringify(data, null, 2);
+
+const nextjsData = simulateNextJSData(data);
+nextjsDataDiv.textContent = JSON.stringify(nextjsData, null, 2);
+
+} catch (error) {
+    statusBadge.className = 'status-badge status-error';
+statusBadge.textContent = 'Error';
+apiResponseDiv.textContent = JSON.stringify({ error: error.message }, null, 2);
+nextjsDataDiv.textContent = JSON.stringify({ error: 'Failed to connect to API' }, null, 2);
+}
+}
+
+function clearAll() {
+document.getElementById('contextId').value = '550e8400-e29b-41d4-a716-446655440000';
+document.getElementById('cursorPosition').value = 0;
+document.getElementById('noteState').value = '';
+document.getElementById('dynamicSchema').value = '';
+document.getElementById('taskContext').value = '';
+document.getElementById('requestPayload').textContent = '{}';
+document.getElementById('apiResponse').textContent = '{}';
+document.getElementById('nextjsData').textContent = '{}';
+document.getElementById('statusBadge').className = 'status-badge status-info';
+document.getElementById('statusBadge').textContent = 'Ready';
+document.getElementById('audioPlayerContainer').style.display = 'none';
+sendBtn.disabled = true;
+audioBlob = null;
+audioChunks = [];
+}
+
+// Initialize
+updateContextFields();
+</script>
+  </body>
+    </html>

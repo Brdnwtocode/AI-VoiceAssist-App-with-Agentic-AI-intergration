@@ -210,9 +210,17 @@ audio
 
 File
 
-Yes
+Conditional
 
-Audio blob. Accepted: audio/webm, audio/mp3. Max size: 10MB.
+Audio blob. Accepted: audio/webm, audio/mp3. Max size: 10MB. Required if `transcript` is absent.
+
+transcript
+
+String
+
+Conditional
+
+Pre-transcribed user speech (e.g. from client-side realtime STT). Required if `audio` is absent. At least one of `audio` or `transcript` must be sent.
 
 context_type
 

@@ -1,12 +1,14 @@
 import logging
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from litellm import Router
 
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,8 +17,8 @@ logging.basicConfig(
 logger = logging.getLogger("voice_ai_microservice")
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
-ALLOWED_CONTEXTS = ("NOTE", "STACK", "TASK", "CALENDAR")
-ALLOWED_MIME_TYPES = {"audio/webm", "audio/mp3"}
+ALLOWED_CONTEXTS = ("NOTE", "STACK", "TASK", "CALENDAR", "TASKS")
+ALLOWED_MIME_TYPES = {"audio/webm", "audio/mp3", "audio/mpeg"}
 RESOLVER_PRIMARY = "gemini/gemini-2.5-flash"
 RESOLVER_FALLBACK = "groq/llama-3.3-70b-versatile"
 SENTINEL_MODEL = "groq/llama-3.1-8b-instant"
@@ -76,3 +78,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from .routes import register_routes
+
+register_routes(app)

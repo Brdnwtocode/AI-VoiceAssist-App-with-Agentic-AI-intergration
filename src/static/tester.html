@@ -285,6 +285,23 @@ width: 100%;
 <input type="number" id="cursorPosition" value="0" min="0">
 </div>
 
+<div class="form-group">
+<label>Input mode:</label>
+<div class="button-group" style="margin-top: 0;">
+<label style="display: inline-flex; align-items: center; gap: 6px; font-weight: normal;">
+<input type="radio" name="inputMode" value="audio" checked onchange="updateInputMode()"> Audio (server STT)
+</label>
+<label style="display: inline-flex; align-items: center; gap: 6px; font-weight: normal;">
+<input type="radio" name="inputMode" value="transcript" onchange="updateInputMode()"> Transcript only
+</label>
+</div>
+</div>
+
+<div class="form-group" id="transcriptGroup" style="display: none;">
+<label for="transcriptInput">Transcript:</label>
+<textarea id="transcriptInput" placeholder="Type or paste transcribed speech..." oninput="updateSendButton()"></textarea>
+</div>
+
 <div class="form-group" id="noteStateGroup">
 <label for="noteState">Note State (JSON):</label>
 <textarea id="noteState" placeholder='{"content": "# My Note\n\nContent here..."}'></textarea>
@@ -390,8 +407,10 @@ mediaRecorder.onstop = () => {
     audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
 const audioUrl = URL.createObjectURL(audioBlob);
 audioPlayer.src = audioUrl;
+if (!isTranscriptMode()) {
 audioPlayerContainer.style.display = 'block';
-sendBtn.disabled = false;
+}
+updateSendButton();
 stream.getTracks().forEach(track => track.stop());
 };
 
@@ -415,6 +434,27 @@ pushToTalkBtn.textContent = '🎙️ HOLD TO TALK';
 recordingIndicator.classList.remove('active');
 }
 
+function isTranscriptMode() {
+return document.querySelector('input[name="inputMode"]:checked')?.value === 'transcript';
+}
+
+function updateInputMode() {
+const transcriptMode = isTranscriptMode();
+document.getElementById('transcriptGroup').style.display = transcriptMode ? 'block' : 'none';
+document.querySelector('.push-to-talk-container').style.display = transcriptMode ? 'none' : 'block';
+document.getElementById('audioPlayerContainer').style.display = transcriptMode ? 'none' : (audioBlob ? 'block' : 'none');
+updateSendButton();
+}
+
+function updateSendButton() {
+if (isTranscriptMode()) {
+const text = document.getElementById('transcriptInput').value.trim();
+sendBtn.disabled = !text;
+} else {
+sendBtn.disabled = !audioBlob;
+}
+}
+
 function updateContextFields() {
 const contextType = document.getElementById('contextType').value;
 document.getElementById('noteStateGroup').style.display = contextType === 'NOTE' ? 'block' : 'none';
@@ -429,6 +469,11 @@ const payload = {
     context_id: document.getElementById('contextId').value,
     cursor_position: parseInt(document.getElementById('cursorPosition').value) || 0,
 };
+if (isTranscriptMode()) {
+payload.transcript = document.getElementById('transcriptInput').value.trim();
+} else {
+payload.audio = 'audio/webm blob';
+}
 
 if (contextType === 'NOTE') {
 const noteState = document.getElementById('noteState').value;
@@ -482,7 +527,14 @@ return nextjsData;
 }
 
 async function sendRequest() {
-if (!audioBlob) {
+const transcriptMode = isTranscriptMode();
+const transcriptText = document.getElementById('transcriptInput').value.trim();
+if (transcriptMode) {
+if (!transcriptText) {
+alert('Please enter a transcript!');
+return;
+}
+} else if (!audioBlob) {
 alert('Please record audio first!');
 return;
 }
@@ -496,7 +548,11 @@ statusBadge.className = 'status-badge status-info';
 statusBadge.textContent = 'Sending...';
 
 const formData = new FormData();
+if (transcriptMode) {
+formData.append('transcript', transcriptText);
+} else {
 formData.append('audio', audioBlob, 'audio.webm');
+}
 formData.append('context_type', document.getElementById('contextType').value);
 formData.append('context_id', document.getElementById('contextId').value);
 formData.append('cursor_position', document.getElementById('cursorPosition').value);
@@ -548,6 +604,7 @@ nextjsDataDiv.textContent = JSON.stringify({ error: 'Failed to connect to API' }
 function clearAll() {
 document.getElementById('contextId').value = '550e8400-e29b-41d4-a716-446655440000';
 document.getElementById('cursorPosition').value = 0;
+document.getElementById('transcriptInput').value = '';
 document.getElementById('noteState').value = '';
 document.getElementById('dynamicSchema').value = '';
 document.getElementById('taskContext').value = '';
@@ -564,6 +621,7 @@ audioChunks = [];
 
 // Initialize
 updateContextFields();
+updateInputMode();
 </script>
   </body>
     </html>

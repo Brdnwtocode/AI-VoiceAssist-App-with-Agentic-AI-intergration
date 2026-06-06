@@ -8,7 +8,7 @@ Deterministic integration tests for `POST /api/v1/voice/process` and `GET /healt
 run_tests.bat
 ```
 
-Creates `venv` if needed, installs `requirements.txt`, starts Uvicorn with `MOCK_OPENAI=1`, runs `test_contract.py`, then stops the listener on port 8000.
+Creates `venv` if needed, installs `requirements.txt`, starts Uvicorn with `MOCK_OPENAI=1`, runs `src.test_contract`, then stops the listener on port 8000.
 
 ## Quick start (Unix)
 
@@ -31,21 +31,21 @@ Terminal A (mock mode — no OpenAI key required):
 ```bash
 set MOCK_OPENAI=1          # Windows CMD
 # export MOCK_OPENAI=1     # Unix
-python -m uvicorn main:app --host 127.0.0.1 --port 8000
+python -m uvicorn src.main:app --host 127.0.0.1 --port 8000
 ```
 
 Terminal B:
 
 ```bash
 set SERVICE_URL=http://127.0.0.1:8000
-python test_contract.py --mock-openai
+python -m src.test_contract --mock-openai
 ```
 
 ## Live OpenAI (optional)
 
 1. Unset `MOCK_OPENAI` and set a valid `OPENAI_API_KEY` in `.env`.
 2. Start the server normally.
-3. Run `python test_contract.py --real-openai`.
+3. Run `python -m src.test_contract --real-openai`.
 
 Deterministic LLM cases are **skipped** in this mode; validation, error paths, `/health`, and raw `413` checks still run. Full end-to-end STT+NLU checks require real audio and are inherently non-deterministic.
 

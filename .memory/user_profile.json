@@ -1,0 +1,18 @@
+{
+  "user_id": "e2e6bb31-ec67-425a-a437-a84020dcc54d",
+  "preferred_language": "vi",
+  "frequently_used_actions": {
+    "none": 1
+  },
+  "frequently_used_contexts": {
+    "NOTE": 1
+  },
+  "common_workflows": [],
+  "tone_preference": "command",
+  "total_interactions": 1,
+  "known_facts": {
+    "user_name": "halen"
+  },
+  "created_at": "2026-06-08T07:09:25.576612+00:00",
+  "updated_at": "2026-06-08T07:09:32.203160+00:00"
+}

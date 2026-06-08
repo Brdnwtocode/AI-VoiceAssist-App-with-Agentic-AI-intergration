@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Live Viewer</title>
+<title>Live Viewer — AI Voice Pipeline</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -11,10 +11,10 @@ body {
     background: #0f1117;
     color: #e1e4e8;
     min-height: 100vh;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
     height: 100vh;
+    overflow: hidden;
 }
 .header {
     background: #161b22;
@@ -82,7 +82,7 @@ body {
 .toolbar button:hover { background: #30363d; }
 .main { display: flex; flex: 1; overflow: hidden; }
 .entry-list {
-    width: 420px; min-width: 320px;
+    width: 380px; min-width: 300px;
     border-right: 1px solid #30363d; overflow-y: auto;
     background: #0d1117; flex-shrink: 0;
 }
@@ -90,35 +90,44 @@ body {
 .entry-list::-webkit-scrollbar-track { background: #0d1117; }
 .entry-list::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
 .entry-item {
-    padding: 10px 16px; border-bottom: 1px solid #21262d;
+    padding: 10px 14px; border-bottom: 1px solid #21262d;
     cursor: pointer; transition: background .15s;
     display: flex; flex-direction: column; gap: 4px;
 }
 .entry-item:hover { background: #161b22; }
-.entry-item.active { background: #1c2333; border-left: 3px solid #58a6ff; }
+.entry-item.active { background: #1c2333; border-left: 3px solid #58a6ff; padding-left: 11px; }
 .entry-item .top-row {
     display: flex; align-items: center; gap: 8px; font-size: .8rem;
 }
 .entry-item .top-row .time {
     color: #8b949e; font-family: 'Courier New',monospace;
-    font-size: .75rem; flex-shrink: 0;
+    font-size: .72rem; flex-shrink: 0;
 }
 .entry-item .top-row .method { font-weight: 600; color: #79c0ff; }
 .entry-item .top-row .status { padding: 1px 6px; border-radius: 3px; font-size: .7rem; font-weight: 600; }
 .entry-item .top-row .status.ok { background: #1b3d1f; color: #7ee787; }
 .entry-item .top-row .status.err { background: #3d1f1f; color: #f87171; }
-.entry-item .top-row .status.redirect { background: #1f2d3d; color: #79c0ff; }
+.entry-item .top-row .action-tag {
+    padding: 1px 6px; border-radius: 3px; font-size: .65rem;
+    background: #2d1f3d; color: #d2a8ff; font-weight: 600;
+    margin-left: auto; flex-shrink: 0;
+}
 .entry-item .top-row .duration {
     color: #8b949e; font-family: 'Courier New',monospace;
-    font-size: .75rem; margin-left: auto; flex-shrink: 0;
+    font-size: .72rem; flex-shrink: 0;
 }
 .entry-item .summary-text {
-    font-size: .82rem; color: #c9d1d9;
+    font-size: .8rem; color: #c9d1d9;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
 }
-.entry-item .summary-text .ctx { color: #d2a8ff; }
-.entry-item .summary-text .transcript { color: #a5d6ff; }
-.entry-item .summary-text .audio-tag { color: #7ee787; }
+.entry-item .pipeline-badge {
+    display: inline-block; font-size: .65rem; padding: 1px 6px; border-radius: 3px;
+    margin-top: 2px;
+}
+.entry-item .pipeline-badge.completed { background: #1b3d1f; color: #7ee787; }
+.entry-item .pipeline-badge.blocked { background: #3d1f1f; color: #f87171; }
+.entry-item .pipeline-badge.error { background: #3d1f1f; color: #f87171; }
+.entry-item .pipeline-badge.running { background: #1f2d3d; color: #79c0ff; }
 .empty-state {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     height: 200px; color: #484f58; font-size: .9rem; gap: 8px;
@@ -129,11 +138,103 @@ body {
 .detail-panel::-webkit-scrollbar-track { background: #0d1117; }
 .detail-panel::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
 .detail-empty {
-    display: flex; align-items: center; justify-content: center;
-    height: 200px; color: #484f58; font-size: .95rem;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 200px; color: #484f58; font-size: .95rem; gap: 12px;
 }
+
+/* ── Pipeline Visualization ── */
+.pipeline-viz {
+    margin-bottom: 20px;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #0d1117;
+}
+.pipeline-viz .viz-header {
+    background: #161b22;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #30363d;
+    font-weight: 600;
+    font-size: .85rem;
+    color: #e1e4e8;
+}
+.pipeline-viz .viz-header .viz-status {
+    padding: 2px 8px; border-radius: 10px; font-size: .7rem; font-weight: 600;
+}
+.pipeline-viz .viz-header .viz-status.completed { background: #1b3d1f; color: #7ee787; }
+.pipeline-viz .viz-header .viz-status.blocked { background: #3d1f1f; color: #f87171; }
+.pipeline-viz .viz-header .viz-status.error { background: #3d1f1f; color: #f87171; }
+.pipeline-viz .viz-header .viz-status.running { background: #1f2d3d; color: #79c0ff; }
+.pipeline-stages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 12px;
+    align-items: flex-start;
+}
+.pipeline-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
+    position: relative;
+}
+.pipeline-connector {
+    display: flex;
+    align-items: center;
+    padding: 0 2px;
+    color: #30363d;
+    font-size: 1rem;
+    margin-top: 14px;
+}
+.pipeline-connector.active { color: #58a6ff; }
+.stage-dot {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .7rem; font-weight: 700;
+    border: 2px solid #30363d;
+    background: #21262d;
+    color: #8b949e;
+    transition: all .3s;
+}
+.stage-dot.passed { background: #1b3d1f; border-color: #3fb950; color: #7ee787; }
+.stage-dot.failed { background: #3d1f1f; border-color: #f85149; color: #f87171; }
+.stage-dot.skipped { background: #1f2d3d; border-color: #8b949e; color: #8b949e; }
+.stage-dot.running { background: #1f2d3d; border-color: #58a6ff; color: #79c0ff; animation: pulse 1.5s infinite; }
+.stage-label {
+    font-size: .62rem; color: #8b949e;
+    margin-top: 4px; text-align: center;
+    max-width: 90px; word-break: break-word;
+    line-height: 1.2;
+}
+.stage-label.active { color: #e1e4e8; }
+
+/* ── Parallel expert group ── */
+.expert-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border: 1px dashed #30363d;
+    border-radius: 6px;
+    padding: 6px;
+    background: #0d11171a;
+}
+.expert-group .group-label {
+    font-size: .6rem; color: #8b949e;
+    text-align: center; text-transform: uppercase;
+    letter-spacing: .5px;
+}
+.expert-group .expert-row {
+    display: flex; gap: 4px; justify-content: center;
+}
+
+/* ── Detail sections ── */
 .detail-section {
-    margin-bottom: 24px; border: 1px solid #30363d; border-radius: 8px; overflow: hidden;
+    margin-bottom: 20px; border: 1px solid #30363d; border-radius: 8px; overflow: hidden;
 }
 .detail-section .section-header {
     background: #161b22; padding: 10px 16px;
@@ -150,12 +251,12 @@ body {
     background: #21262d; color: #8b949e; font-weight: 500;
 }
 .detail-section .section-header .fmt-badge.json { background: #1b3d1f; color: #7ee787; }
-.detail-section .section-header .fmt-badge.audio { background: #3d1f3d; color: #f0a8ff; }
-.detail-section .section-header .fmt-badge.text { background: #1f2d3d; color: #79c0ff; }
 .detail-section .section-header .fmt-badge.form { background: #2d1f1f; color: #f0a8a8; }
 .detail-section .section-header .fmt-badge.error { background: #3d1f1f; color: #f87171; }
+.detail-section .section-header .fmt-badge.stage { background: #1f2d3d; color: #79c0ff; }
 .detail-section .section-body { background: #0d1117; }
 .detail-section .section-body.collapsed { display: none; }
+
 .data-grid { padding: 12px 16px; font-size: .82rem; }
 .data-grid .row { display: flex; padding: 4px 0; border-bottom: 1px solid #1c2128; }
 .data-grid .row:last-child { border-bottom: none; }
@@ -173,10 +274,12 @@ body {
 .data-grid .value.str { color: #a5d6ff; }
 .data-grid .value.num { color: #79c0ff; }
 .data-grid .value.bool { color: #ffa657; }
+
 .code-block {
     padding: 16px; font-family: 'Courier New','Consolas',monospace;
     font-size: .82rem; line-height: 1.5; overflow-x: auto;
     white-space: pre-wrap; word-break: break-word; color: #e1e4e8;
+    max-height: 500px; overflow-y: auto;
 }
 .code-block .string { color: #a5d6ff; }
 .code-block .number { color: #79c0ff; }
@@ -184,65 +287,145 @@ body {
 .code-block .null { color: #8b949e; }
 .code-block .key { color: #d2a8ff; }
 .code-block .bracket { color: #8b949e; }
-.code-block .error-body .string { color: #f87171; }
-.code-block .error-body .key { color: #f87171; }
+
+/* ── Stage details ── */
+.stage-detail-item {
+    padding: 8px 16px; border-bottom: 1px solid #1c2128;
+    display: flex; align-items: center; gap: 10px;
+    font-size: .8rem;
+}
+.stage-detail-item:last-child { border-bottom: none; }
+.stage-detail-item .stage-status-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+.stage-detail-item .stage-status-dot.passed { background: #3fb950; }
+.stage-detail-item .stage-status-dot.failed { background: #f85149; }
+.stage-detail-item .stage-status-dot.skipped { background: #8b949e; }
+.stage-detail-item .stage-name { font-weight: 600; min-width: 160px; color: #e1e4e8; }
+.stage-detail-item .stage-data { color: #8b949e; font-size: .75rem; flex: 1; }
+.stage-detail-item .stage-dur { color: #8b949e; font-family: 'Courier New',monospace; font-size: .72rem; }
+
 @media (max-width: 800px) {
     .main { flex-direction: column; }
-    .entry-list { width: 100%; min-width: 0; max-height: 40vh; border-right: none; border-bottom: 1px solid #30363d; }
-    .detail-panel { max-height: 60vh; }
+    .entry-list { width: 100%; min-width: 0; max-height: 35vh; border-right: none; border-bottom: 1px solid #30363d; }
+    .detail-panel { max-height: 65vh; }
+    .pipeline-stages { flex-wrap: wrap; }
 }
 </style>
 </head>
 <body>
 
 <div class="header">
-    <h1>Live Viewer</h1>
+    <h1>🔬 Live Viewer — AI Voice Pipeline</h1>
     <span class="connection-status" id="connStatus">connecting...</span>
+    <span class="connection-status" id="pipeStatus" style="margin-left:4px">pipe: connecting...</span>
     <div class="stats">
-        <span>entries: <strong id="entryCount">0</strong></span>
+        <span>requests: <strong id="entryCount">0</strong></span>
+        <span>traces: <strong id="traceCount">0</strong></span>
         <span>last: <strong id="lastEntry">—</strong></span>
     </div>
 </div>
 
 <div class="toolbar">
-    <input type="text" id="filterInput" placeholder="Filter..." oninput="renderList()">
+    <input type="text" id="filterInput" placeholder="Filter by transcript, action, context..." oninput="renderList()">
     <label><input type="checkbox" id="autoScroll" checked> Auto-scroll</label>
     <button onclick="clearAll()">Clear</button>
 </div>
 
 <div class="main">
-    <div class="entry-list" id="entryList"><div class="empty-state"><div class="icon">&#9678;</div><div>Waiting for requests...</div></div></div>
-    <div class="detail-panel" id="detailPanel"><div class="detail-empty">Select an entry to inspect</div></div>
+    <div class="entry-list" id="entryList">
+        <div class="empty-state"><div class="icon">&#9678;</div><div>Waiting for requests...</div></div>
+    </div>
+    <div class="detail-panel" id="detailPanel">
+        <div class="detail-empty">
+            <div style="font-size:3rem">🔍</div>
+            <div>Select a request to inspect</div>
+            <div style="font-size:.75rem;color:#484f58">Shows AI pipeline stages, request/response data packages</div>
+        </div>
+    </div>
 </div>
 
 <script>
+// ── State ──
 const entries = [];
+const pipelineTraces = {};
 let selectedId = null;
 let eventSource = null;
+let pipelineSSE = null;
 
+// ── SSE Connections ──
 function connectSSE() {
     if (eventSource) eventSource.close();
     eventSource = new EventSource(location.origin + '/api/live-viewer/stream');
     const cs = document.getElementById('connStatus');
     eventSource.onopen = () => { cs.textContent='connected'; cs.className='connection-status connected'; };
     eventSource.onmessage = e => {
-        try { const entry = JSON.parse(e.data); entries.push(entry); updateStats(); renderList(!!document.getElementById('autoScroll').checked); }
-        catch(err) { console.error('SSE parse error:', err); }
+        try {
+            const entry = JSON.parse(e.data);
+            if (entry.pipeline_trace) {
+                pipelineTraces[entry.pipeline_trace.id || entry.id] = entry.pipeline_trace;
+            }
+            entries.push(entry);
+            updateStats();
+            renderList(!!document.getElementById('autoScroll').checked);
+        } catch(err) { console.error('SSE parse error:', err); }
     };
-    eventSource.onerror = () => { cs.textContent='disconnected'; cs.className='connection-status disconnected'; setTimeout(connectSSE, 3000); };
+    eventSource.onerror = () => {
+        cs.textContent='disconnected'; cs.className='connection-status disconnected';
+        setTimeout(connectSSE, 3000);
+    };
+}
+
+function connectPipelineSSE() {
+    if (pipelineSSE) pipelineSSE.close();
+    pipelineSSE = new EventSource(location.origin + '/api/live-viewer/pipeline/stream');
+    const ps = document.getElementById('pipeStatus');
+    pipelineSSE.onopen = () => { ps.textContent='pipe: live'; ps.className='connection-status connected'; };
+    pipelineSSE.onmessage = e => {
+        try {
+            const event = JSON.parse(e.data);
+            if (event.type === 'pipeline_start' && event.trace) {
+                pipelineTraces[event.trace.id] = event.trace;
+            } else if (event.type === 'pipeline_end' && event.trace) {
+                pipelineTraces[event.trace.id] = event.trace;
+                document.getElementById('traceCount').textContent = Object.keys(pipelineTraces).length;
+                if (selectedId) refreshDetail();
+            } else if (event.type === 'pipeline_stage') {
+                const tid = event.request_id;
+                if (!pipelineTraces[tid]) {
+                    pipelineTraces[tid] = { id: tid, stages: [], status: 'running', transcript: '', context_type: '' };
+                }
+                pipelineTraces[tid].stages.push(event.stage);
+                if (selectedId) refreshDetail();
+            }
+        } catch(err) { console.error('Pipeline SSE error:', err); }
+    };
+    pipelineSSE.onerror = () => {
+        ps.textContent='pipe: reconnecting'; ps.className='connection-status disconnected';
+        setTimeout(connectPipelineSSE, 3000);
+    };
 }
 
 function updateStats() {
     document.getElementById('entryCount').textContent = entries.length;
+    document.getElementById('traceCount').textContent = Object.keys(pipelineTraces).length;
     if (entries.length > 0) document.getElementById('lastEntry').textContent = entries[entries.length-1].timestamp;
 }
 
+// ── Rendering ──
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function renderList(scroll) {
     const container = document.getElementById('entryList');
     const filter = (document.getElementById('filterInput').value || '').toLowerCase();
-    const filtered = filter ? entries.filter(e => (e.summary||'').toLowerCase().includes(filter) || String(e.status_code).includes(filter)) : entries;
+    const filtered = filter
+        ? entries.filter(e => {
+            const s = (e.summary||'').toLowerCase();
+            const a = (e.action||'').toLowerCase();
+            const ps = (e.pipeline_status||'').toLowerCase();
+            return s.includes(filter) || String(e.status_code).includes(filter) || a.includes(filter) || ps.includes(filter);
+        })
+        : entries;
     if (filtered.length === 0) {
         container.innerHTML = entries.length === 0
             ? '<div class="empty-state"><div class="icon">&#9678;</div><div>Waiting for requests...</div></div>'
@@ -254,10 +437,26 @@ function renderList(scroll) {
         const sc = entry.status_code < 300 ? 'ok' : (entry.status_code < 400 ? 'redirect' : 'err');
         const act = entry.id === selectedId ? ' active' : '';
         const s = entry.summary || '';
-        let sh = esc(s).replace(/\[([^\]]+)\]/g,'<span class="ctx">[$1]</span>').replace(/\(audio\)/g,'<span class="audio-tag">(audio)</span>').replace(/"([^"]+)"/g,'<span class="transcript">"$1"</span>');
+        const action = entry.action || '';
+        const ps = entry.pipeline_status || '';
+        const psClass = ps === 'completed' ? 'completed' : (ps === 'blocked' ? 'blocked' : (ps === 'error' ? 'error' : ''));
+
+        let sh = esc(s)
+            .replace(/\[([^\]]+)\]/g,'<span style="color:#d2a8ff">[$1]</span>')
+            .replace(/\(audio\)/g,'<span style="color:#7ee787">(audio)</span>')
+            .replace(/"([^"]+)"/g,'<span style="color:#a5d6ff">"$1"</span>');
+
         html += '<div class="entry-item'+act+'" data-id="'+entry.id+'" onclick="selectEntry(\''+entry.id+'\')">';
-        html += '<div class="top-row"><span class="time">'+(entry.timestamp||'')+'</span><span class="method">'+(entry.method||'POST')+'</span><span class="status '+sc+'">'+entry.status_code+'</span><span class="duration">'+entry.duration_ms+'ms</span></div>';
-        html += '<div class="summary-text">'+sh+'</div></div>';
+        html += '<div class="top-row">';
+        html += '<span class="time">'+(entry.timestamp||'')+'</span>';
+        html += '<span class="method">'+(entry.method||'POST')+'</span>';
+        html += '<span class="status '+sc+'">'+entry.status_code+'</span>';
+        if (action) html += '<span class="action-tag">'+esc(action)+'</span>';
+        html += '<span class="duration">'+entry.duration_ms+'ms</span>';
+        html += '</div>';
+        html += '<div class="summary-text">'+sh+'</div>';
+        if (ps) html += '<span class="pipeline-badge '+psClass+'">pipeline: '+esc(ps)+'</span>';
+        html += '</div>';
     }
     container.innerHTML = html;
     if (scroll) { container.scrollTop = container.scrollHeight; }
@@ -271,6 +470,133 @@ function selectEntry(id) {
     if (entry) renderDetail(entry);
 }
 
+function refreshDetail() {
+    if (!selectedId) return;
+    const entry = entries.find(e => e.id === selectedId);
+    if (entry) renderDetail(entry);
+}
+
+// ── Pipeline Visualization ──
+const PIPELINE_FLOW = [
+    { id: 'safety_gate', label: 'Safety\nGate', icon: '🛡️' },
+    { id: 'complexity_router', label: 'Complexity\nRouter', icon: '🔀' },
+    { id: 'experts', label: 'Experts', icon: '🧠', isGroup: true, children: [
+        { id: 'contrarian_expert', label: 'Contrarian', icon: '⚔️' },
+        { id: 'research_expert', label: 'Research', icon: '🔍' },
+        { id: 'conversation_expert', label: 'Conversat.', icon: '💬' },
+        { id: 'planner', label: 'Planner', icon: '📋' },
+    ]},
+    { id: 'synthesizer', label: 'Synthesizer', icon: '🔗' },
+    { id: 'resolver', label: 'Resolver', icon: '🎯' },
+    { id: 'reflection', label: 'Reflection', icon: '🪞' },
+];
+
+function getStageStatus(stages, stageId) {
+    if (!stages) return 'pending';
+    const matches = stages.filter(s => s.name === stageId || s.name.startsWith(stageId));
+    if (matches.length === 0) return 'pending';
+    const hasFailed = matches.some(s => s.status === 'failed');
+    const allPassed = matches.every(s => s.status === 'passed');
+    if (hasFailed) return 'failed';
+    if (allPassed) return 'passed';
+    return 'running';
+}
+
+function getStageData(stages, stageId) {
+    if (!stages) return {};
+    const match = stages.find(s => s.name === stageId || s.name.startsWith(stageId));
+    return match ? match.data : {};
+}
+
+function renderPipelineViz(trace) {
+    if (!trace || !trace.stages || trace.stages.length === 0) {
+        return '<div class="pipeline-viz"><div class="viz-header">🔬 AI Pipeline <span class="viz-status" style="background:#21262d;color:#8b949e">No trace data</span></div><div class="pipeline-stages"><span style="color:#484f58;padding:12px">Pipeline trace not available — make a request to see pipeline execution</span></div></div>';
+    }
+
+    const stages = trace.stages;
+    const traceStatus = trace.status || 'running';
+    const statusClass = traceStatus === 'completed' ? 'completed' : (traceStatus === 'blocked' ? 'blocked' : (traceStatus === 'error' ? 'error' : 'running'));
+    const ctx = trace.context_type ? ' ['+trace.context_type+']' : '';
+
+    let vizHTML = '<div class="pipeline-viz">';
+    vizHTML += '<div class="viz-header">🔬 AI Pipeline'+ctx+' <span class="viz-status '+statusClass+'">' + traceStatus.toUpperCase() + '</span><span style="margin-left:auto;font-size:.7rem;color:#8b949e">'+(trace.total_duration_ms||'?')+'ms total</span></div>';
+    vizHTML += '<div class="pipeline-stages">';
+
+    for (let i = 0; i < PIPELINE_FLOW.length; i++) {
+        const node = PIPELINE_FLOW[i];
+
+        if (i > 0) {
+            const prevNode = PIPELINE_FLOW[i-1];
+            const prevStatus = getStageStatus(stages, prevNode.id);
+            vizHTML += '<div class="pipeline-connector'+(prevStatus==='passed'?' active':'')+'">→</div>';
+        }
+
+        if (node.isGroup) {
+            const allPassed = node.children.every(c => getStageStatus(stages, c.id) === 'passed');
+            const anyFailed = node.children.some(c => getStageStatus(stages, c.id) === 'failed');
+            const anyRunning = node.children.some(c => getStageStatus(stages, c.id) === 'running');
+            let groupStatus = 'pending';
+            if (allPassed) groupStatus = 'passed';
+            else if (anyFailed) groupStatus = 'failed';
+            else if (anyRunning) groupStatus = 'running';
+
+            vizHTML += '<div class="expert-group">';
+            vizHTML += '<div class="group-label">Experts (parallel)</div>';
+            vizHTML += '<div class="expert-row">';
+            for (const child of node.children) {
+                const cs = getStageStatus(stages, child.id);
+                const cd = getStageData(stages, child.id);
+                let tooltip = child.label + ': ' + cs;
+                if (cd.risk) tooltip += ' risk='+cd.risk;
+                if (cd.confidence !== undefined) tooltip += ' conf='+Math.round(cd.confidence*100)+'%';
+                if (cd.language) tooltip += ' lang='+cd.language;
+                vizHTML += '<div class="pipeline-stage" title="'+esc(tooltip)+'">';
+                vizHTML += '<div class="stage-dot '+cs+'">'+child.icon+'</div>';
+                vizHTML += '<div class="stage-label'+(cs!=='pending'?' active':'')+'">'+esc(child.label)+'</div>';
+                vizHTML += '</div>';
+            }
+            vizHTML += '</div></div>';
+        } else {
+            const ss = getStageStatus(stages, node.id);
+            const sd = getStageData(stages, node.id);
+            let tooltip = node.label.replace('\n',' ') + ': ' + ss;
+            if (sd.safe !== undefined) tooltip += ' safe='+sd.safe;
+            if (sd.complexity) tooltip += ' ('+sd.complexity+')';
+            if (sd.action) tooltip += ' → '+sd.action;
+            if (sd.score !== undefined) tooltip += ' score='+Math.round(sd.score*100)+'%';
+
+            vizHTML += '<div class="pipeline-stage" title="'+esc(tooltip)+'">';
+            vizHTML += '<div class="stage-dot '+ss+'">'+node.icon+'</div>';
+            vizHTML += '<div class="stage-label'+(ss!=='pending'?' active':'')+'">'+esc(node.label)+'</div>';
+            vizHTML += '</div>';
+        }
+    }
+
+    vizHTML += '</div></div>';
+    return vizHTML;
+}
+
+function renderStageDetails(stages) {
+    if (!stages || stages.length === 0) return '';
+    let html = '';
+    for (const stage of stages) {
+        const stClass = stage.status || 'pending';
+        let dataStr = '';
+        if (stage.data && Object.keys(stage.data).length > 0) {
+            const entries = Object.entries(stage.data).slice(0, 4);
+            dataStr = entries.map(([k,v]) => k+': '+String(v).substring(0,60)).join(' | ');
+        }
+        html += '<div class="stage-detail-item">';
+        html += '<div class="stage-status-dot '+stClass+'"></div>';
+        html += '<span class="stage-name">'+esc(stage.name)+'</span>';
+        html += '<span class="stage-data">'+esc(dataStr)+'</span>';
+        html += '<span class="stage-dur">'+stage.duration_ms+'ms</span>';
+        html += '</div>';
+    }
+    return html;
+}
+
+// ── Detail Rendering ──
 function fv(v) {
     if (v === null || v === undefined) return '<span class="value null">null</span>';
     if (typeof v === 'boolean') return '<span class="value bool">'+v+'</span>';
@@ -280,7 +606,7 @@ function fv(v) {
     if (s.length > 1 && (s[0] === '{' || s[0] === '[')) {
         try { return '<span class="value">'+hlJSON(JSON.parse(s))+'</span>'; } catch(e) {}
     }
-    if (s.length > 5000) return '<span class="value str">'+esc(s.substring(0,5000))+'… <em>(truncated, '+s.length+' total)</em></span>';
+    if (s.length > 5000) return '<span class="value str">'+esc(s.substring(0,5000))+'… <em>(truncated)</em></span>';
     return '<span class="value str">'+esc(s)+'</span>';
 }
 
@@ -305,14 +631,6 @@ function hlJSON(obj, indent) {
     return '<span class="bracket">{</span>'+nl+keys.map(k => indent+'  <span class="key">"'+esc(k)+'"</span>: '+hlJSON(obj[k], indent+'  ')).join(','+nl)+nl+indent+'<span class="bracket">}</span>';
 }
 
-function fmtCT(ct) {
-    if (!ct) return 'text';
-    if (ct.includes('json')) return 'json';
-    if (ct.includes('audio')) return 'audio';
-    if (ct.includes('form-data')||ct.includes('x-www-form-urlencoded')) return 'form';
-    return 'text';
-}
-
 function buildSection(id, title, fmtClass, fmtLabel, bodyHTML, open) {
     const o = open !== false;
     return '<div class="detail-section" data-section="'+id+'">'+
@@ -323,83 +641,88 @@ function buildSection(id, title, fmtClass, fmtLabel, bodyHTML, open) {
         '</div><div class="section-body'+(o?'':' collapsed')+'">'+bodyHTML+'</div></div>';
 }
 
-function toggleSection(h) { const b = h.nextElementSibling; const a = h.querySelector('.arrow'); if(b){b.classList.toggle('collapsed'); if(a)a.classList.toggle('open');} }
+function toggleSection(h) {
+    const b = h.nextElementSibling;
+    const a = h.querySelector('.arrow');
+    if(b){b.classList.toggle('collapsed'); if(a)a.classList.toggle('open');}
+}
 
 function renderDetail(entry) {
     const panel = document.getElementById('detailPanel');
     const req = entry.request || {};
     const resp = entry.response || {};
-    const headers = req.headers || {};
     const formFields = req.form_fields || {};
     const audioInfo = req.audio_info;
     const respBody = resp.body || {};
 
-    const reqCT = headers['content-type'] || 'unknown';
-    const reqFmt = fmtCT(reqCT);
-    const isError = respBody && typeof respBody === 'object' && respBody.error;
+    // Look up pipeline trace
+    let trace = entry.pipeline_trace;
+    if (!trace) trace = pipelineTraces[entry.id];
 
+    const isError = respBody && typeof respBody === 'object' && respBody.error;
     let sections = '';
 
-    // -- Request Metadata row (method, path, query_string, client) --
+    // ── Pipeline Visualization (always on top) ──
+    sections += renderPipelineViz(trace);
+
+    // ── Pipeline Stage Details ──
+    if (trace && trace.stages && trace.stages.length > 0) {
+        sections += buildSection('pipeline-stages', '📊 Pipeline Stage Details ('+trace.stages.length+' stages)', 'stage', 'stages',
+            '<div style="padding:0">'+renderStageDetails(trace.stages)+'</div>', false);
+    }
+
+    // ── Request: Metadata ──
     const metaRows = [
         ['method', req.method || 'POST'],
-        ['path', req.path || '/'],
-        ['query_string', req.query_string || '(none)'],
+        ['path', req.path || '/api/v1/voice/process'],
         ['client', req.client || '(unknown)'],
     ];
-    sections += buildSection('req-meta', 'Request: Metadata', reqFmt, reqCT,
+    sections += buildSection('req-meta', '📤 Request: Metadata', 'json', 'POST',
         '<div class="data-grid">'+metaRows.map(([k,v]) => '<div class="row"><div class="key">'+k+'</div><span class="value str">'+esc(v)+'</span></div>').join('')+'</div>');
 
-    // -- Request Headers (all HTTP headers) --
-    if (Object.keys(headers).length > 0) {
-        sections += buildSection('req-headers', 'Request: HTTP Headers ('+Object.keys(headers).length+')', null, null,
-            '<div class="data-grid">'+kvRows(headers)+'</div>');
-    }
-
-    // -- Request Form Fields (all parsed form data) --
+    // ── Request: Form Fields (sent data package) ──
     if (Object.keys(formFields).length > 0) {
-        sections += buildSection('req-form', 'Request: Form Fields ('+Object.keys(formFields).length+')', reqFmt, reqCT,
-            '<div class="data-grid">'+kvRows(formFields)+'</div>');
-    } else {
-        // Show a message explaining why form fields might be empty
-        const reason = isError
-            ? 'This entry was captured at the error-handler level (status '+entry.status_code+'). The form body was not parsed before the error occurred, so raw form fields are unavailable. The HTTP headers above show what the server received.'
-            : 'No form fields were captured for this entry.';
-        sections += buildSection('req-form', 'Request: Form Fields', reqFmt, reqCT,
-            '<div class="code-block"><span class="null">'+esc(reason)+'</span></div>');
+        const displayFields = {};
+        for (const [k, v] of Object.entries(formFields)) {
+            if (v && v !== 'None' && v !== 'null') displayFields[k] = v;
+        }
+        if (Object.keys(displayFields).length > 0) {
+            sections += buildSection('req-form', '📤 Request: Sent Data Package ('+Object.keys(displayFields).length+' fields)', 'form', 'form-data',
+                '<div class="data-grid">'+kvRows(displayFields)+'</div>');
+        }
     }
 
-    // -- Audio info (if present) --
+    // ── Audio Info ──
     if (audioInfo && typeof audioInfo === 'object' && Object.keys(audioInfo).length > 0) {
-        sections += buildSection('req-audio', 'Request: Audio File', 'audio', 'audio',
+        sections += buildSection('req-audio', '🎙️ Request: Audio File', 'form', 'audio',
             '<div class="data-grid">'+kvRows(audioInfo)+'</div>');
     }
 
-    // -- Response --
+    // ── Response: Body ──
     const respCT = resp.content_type || 'application/json';
-    const respFmt = isError ? 'error' : fmtCT(respCT);
-    sections += buildSection('resp-body', 'Response: Body', respFmt, respCT,
-        '<div class="code-block'+(isError?' error-body':'')+'">'+hlJSON(respBody)+'</div>',
-        true);
+    const respFmt = isError ? 'error' : 'json';
+    sections += buildSection('resp-body', '📥 Response: Received Data Package', respFmt, respCT,
+        '<div class="code-block'+(isError?' style="color:#f87171"':'')+'">'+hlJSON(respBody)+'</div>', true);
 
-    // -- Response metadata section (always shown) --
+    // ── Response: Metadata ──
     const rMeta = [
         ['status_code', String(entry.status_code)],
-        ['content_type', respCT],
+        ['action', entry.action || respBody.action || '—'],
         ['duration', String(entry.duration_ms)+'ms'],
         ['timestamp', entry.timestamp || ''],
     ];
-    sections += buildSection('resp-meta', 'Response: Metadata', respFmt, respCT,
-        '<div class="data-grid">'+rMeta.map(([k,v]) => '<div class="row"><div class="key">'+k+'</div><span class="value str">'+esc(v)+'</span></div>').join('')+'</div>',
-        true);
+    sections += buildSection('resp-meta', '📥 Response: Metadata', 'json', String(entry.status_code),
+        '<div class="data-grid">'+rMeta.map(([k,v]) => '<div class="row"><div class="key">'+k+'</div><span class="value str">'+esc(v)+'</span></div>').join('')+'</div>', true);
 
     panel.innerHTML = sections;
 }
 
 function clearAll() {
-    entries.length = 0; selectedId = null;
+    entries.length = 0;
+    for (const k in pipelineTraces) delete pipelineTraces[k];
+    selectedId = null;
     document.getElementById('entryList').innerHTML = '<div class="empty-state"><div class="icon">&#9678;</div><div>Waiting for requests...</div></div>';
-    document.getElementById('detailPanel').innerHTML = '<div class="detail-empty">Select an entry to inspect</div>';
+    document.getElementById('detailPanel').innerHTML = '<div class="detail-empty"><div style="font-size:3rem">🔍</div><div>Select a request to inspect</div></div>';
     updateStats();
 }
 
@@ -411,15 +734,32 @@ async function loadExisting() {
             const dr = await fetch('/api/live-viewer/entries/'+summ.id);
             if (dr.ok) {
                 const full = await dr.json();
-                if (!entries.find(e => e.id === full.id)) entries.push(full);
+                if (!entries.find(e => e.id === full.id)) {
+                    entries.push(full);
+                    if (full.pipeline_trace) {
+                        pipelineTraces[full.pipeline_trace.id || full.id] = full.pipeline_trace;
+                    }
+                }
             }
         }
         updateStats(); renderList(true);
     } catch(err) { console.error('loadExisting:', err); }
+
+    // Load pipeline traces
+    try {
+        const tr = await fetch('/api/live-viewer/pipeline/traces');
+        const traces = await tr.json();
+        for (const t of traces) {
+            if (!pipelineTraces[t.id]) pipelineTraces[t.id] = t;
+        }
+        document.getElementById('traceCount').textContent = Object.keys(pipelineTraces).length;
+    } catch(err) { console.error('loadTraces:', err); }
 }
 
+// ── Init ──
 loadExisting();
 connectSSE();
+connectPipelineSSE();
 </script>
 </body>
 </html>

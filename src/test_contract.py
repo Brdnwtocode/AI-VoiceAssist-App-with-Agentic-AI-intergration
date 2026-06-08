@@ -169,16 +169,15 @@ def test_note_update_append(audio_path: str, client: httpx.Client) -> None:
     body = r.json()
     assert_success_contract(body)
     assert body["action"] == "update_note"
-    assert body["message"] == "Note updated"
+    assert body["message"] == "Note update suggested"
     ud = body["updatedData"]
     assert ud is not None
-    for k in ("id", "title", "content", "createdAt", "updatedAt"):
-        assert k in ud
-    assert "userId" not in ud
+    assert "id" in ud
+    assert "diff" in ud
     assert ud["id"] == NOTE_ID
     assert body.get("reply") is None
-    expected = note["content"] + "\n" + "Meeting notes from today"
-    assert ud["content"] == expected
+    assert ud["diff"]["action_type"] == "append"
+    assert ud["diff"]["content_to_insert"] == "Meeting notes from today"
 
 
 def test_note_insert_at_cursor(audio_path: str, client: httpx.Client) -> None:
@@ -207,7 +206,8 @@ def test_note_insert_at_cursor(audio_path: str, client: httpx.Client) -> None:
     body = r.json()
     assert_success_contract(body)
     assert body["action"] == "update_note"
-    assert body["updatedData"]["content"] == "012XX3456789"
+    assert body["updatedData"]["diff"]["content_to_insert"] == "XX"
+    assert body["updatedData"]["diff"]["action_type"] == "insert_at_cursor"
 
 
 def test_stack_add_row(audio_path: str, client: httpx.Client) -> None:
@@ -245,10 +245,11 @@ def test_stack_add_row(audio_path: str, client: httpx.Client) -> None:
     body = r.json()
     assert_success_contract(body)
     assert body["action"] == "add_stack_row"
-    assert body["message"] == "Row added"
+    assert body["message"] == "Row suggested"
     ud = body["updatedData"]
     assert ud["stackId"] == STACK_ID
     assert ud["id"].startswith("temp_row_")
+    assert ud["suggestionType"] == "ghost_row"
     d = ud["data"]
     assert d["col1"] == "Buy groceries"
     assert d["col2"] == 2
@@ -491,7 +492,7 @@ def test_packed_context_note_update(client: httpx.Client) -> None:
     body = r.json()
     assert_success_contract(body)
     assert body["action"] == "update_note"
-    assert body["updatedData"]["content"] == "0123456789\nXX"
+    assert body["updatedData"]["diff"]["content_to_insert"] == "XX"
     assert body["updatedData"]["id"] == NOTE_ID
 
 

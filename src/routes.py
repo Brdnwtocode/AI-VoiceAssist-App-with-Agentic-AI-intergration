@@ -352,7 +352,9 @@ async def process_voice(
         context_type,
         context_data,
         req_id=req_id,
-        processed_context=processed_context
+        processed_context=processed_context,
+        session_id=request.headers.get("x-session-id", req_id),
+        user_id=request.headers.get("x-user-id", "default"),
     )
 
     action = nlu_result["action"]
@@ -463,6 +465,10 @@ async def process_voice(
         elapsed,
     )
 
+    # Look up pipeline trace for LiveEntry linking
+    pipeline_id = nlu_result.pop("_pipeline_id", None)
+    pipeline_trace = store.get_pipeline_trace_obj(pipeline_id) if pipeline_id else None
+
     store.add(LiveEntry(
         request=_capture_request_body(
             context_type, context_id, cursor_position,
@@ -472,6 +478,7 @@ async def process_voice(
         response=_capture_response_body(payload),
         duration_ms=elapsed,
         status_code=200,
+        pipeline_trace=pipeline_trace,
     ))
     return JSONResponse(content=payload)
 

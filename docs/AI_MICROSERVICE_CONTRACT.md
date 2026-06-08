@@ -4,10 +4,10 @@ codeMarkdown
 
 # Next.js ↔ FastAPI Interface Contract
 
-**Version:** 2.2
+**Version:** 2.3
 **Status:** Active — Source of Truth
 **Authority:** AAi (Architecture AI) & PAi (Principal Architect AI)
-**Last Updated:** May 2026
+**Last Updated:** June 2026
 
 > This contract is the single source of truth for the interface between the Next.js workspace and the FastAPI AI microservice. When this document and the code conflict, this document wins. Code adapts to the contract, not the other way around.
 
@@ -61,9 +61,11 @@ model StackRow {
 
 2. Architecture & Pipeline
 
-The FastAPI microservice is a stateless AI Brain. It receives audio and workspace context from Next.js, processes it through a four-stage pipeline, and returns either a structured action suggestion or a conversational reply.
+The FastAPI microservice is a stateless AI Brain with session-scoped memory. It receives audio and workspace context from Next.js, processes it through a multi-stage LangGraph pipeline, and returns either a structured action suggestion or a conversational reply.
 
 Non-negotiable constraint: The AI pipeline is suggestion-only. It never writes to any database. It never contacts Neon directly or indirectly. Every action returned is a proposal — the user confirms or discards it in the Next.js UI before anything enters the write queue.
+
+Memory & Personalization (v2.3): The service maintains per-user, per-session short-term memory (conversation history) and long-term memory (learned facts, preferences, interaction patterns). This requires Next.js to send `x-session-id` and `x-user-id` headers on every request. See §4.0.
 
 Pipeline Stages
 
@@ -193,196 +195,547 @@ All scenarios stay under the 3500ms SLA, including STT fallback to Groq Whisper 
 
 4. Request Shape — Next.js → FastAPI
 
-codeCode
+### 4.0 Required HTTP Headers
 
-POST /api/v1/voice/process
-Content-Type: multipart/form-data
+The FastAPI microservice uses two custom HTTP headers for **session continuity** and **user isolation**. These must be sent on every `POST /api/v1/voice/process` request.
 
-Field
+| Header | Type | Required | Description |
+|--------|------|----------|-------------|
+| `x-session-id` | String (UUID) | **Yes** | Stable session identifier. Generated once per browser tab / user session. Keeps conversation history intact across multiple voice commands. Without this, every request is treated as a "first turn" with no memory of prior exchanges. |
+| `x-user-id` | String (UUID) | **Yes** | Authenticated user ID from NextJS auth (the `User.id` from Prisma). Scopes all memory — conversation history, learned facts, preferences — to that specific user. Prevents User A's data from leaking into User B's context. Falls back to `"default"` (shared) only when absent. |
 
-Type
+**NextJS implementation guide:**
 
-Required
+```typescript
+// In your API route or server action that calls the FastAPI service:
 
-Description
+const formData = new FormData();
+formData.append('audio', audioBlob, 'audio.webm');
+formData.append('context_type', 'NOTE');
+formData.append('context_id', activeNoteId);
+// ... other fields ...
 
-audio
-
-File
-
-Conditional
-
-Audio blob. Accepted: audio/webm, audio/mp3. Max size: 10MB. Required if `transcript` is absent.
-
-transcript
-
-String
-
-Conditional
-
-Pre-transcribed user speech (e.g. from client-side realtime STT). Required if `audio` is absent. At least one of `audio` or `transcript` must be sent.
-
-context_type
-
-String
-
-Yes
-
-"NOTE" or "STACK". Determines Resolver tool schema.
-
-context_id
-
-String
-
-Yes
-
-UUID of the active note or stack.
-
-cursor_position
-
-String
-
-No
-
-Cursor index as string integer. Defaults to "0". Used by Resolver to determine where to inject text in NOTE context. If note is not focused, defaults to "0" (top of note).
-
-note_state
-
-String
-
-Optional
-
-JSON-serialized note object. Send whenever an active note exists in Zustand state, regardless of context_type. When null or absent — for example, when the user navigates directly to a Stack without opening a note first — the Resolver operates without note context and responds naturally if the user asks note-related questions (e.g. "I don't have a note open right now, but I can still help with your Stack or answer general questions."). FastAPI must never return 400 for a missing note_state. Shape when present: {"id": "...", "userId": "...", "title": "...", "content": "...", "createdAt": "...", "updatedAt": "..."}
-
-dynamic_schema
-
-String
-
-Conditional
-
-Required when context_type = "STACK". JSON-serialized array of column definitions. Shape: [{"id": "col-uuid", "name": "Column Name", "type": "TEXT|INT|FLOAT|BOOLEAN|DATE|SELECT"}]. Do not include stackId per column — it is ignored. type field is non-nullable; a null value returns HTTP 400 before reaching the Resolver.
-
-5. Response Shape — FastAPI → Next.js
-
-All responses are JSON. The shape is identical for all outcomes — only the field values differ.
-
-codeJavaScript
-
-{
-  transcript:  string,        // Raw transcript from STT. Always present.
-  action:      string,        // "update_note" | "add_stack_row" | "none"
-                              // Note: "none" covers both no-action and conversational reply cases.
-                              // Distinguish them by checking whether reply is null or populated.
-  updatedData: object | null, // Structured data for action responses. null for none/conversational.
-  reply:       string | null, // Natural language reply for conversational responses. null for action responses.
-  success:     boolean,       // true if pipeline completed without error.
-  message:     string | null  // Short status string for logging/display. null when reply is present.
-}
-
-Mutual exclusivity rule: updatedData and reply are never both populated in the same response. An action response has updatedData set and reply: null. A conversational response has reply set and updatedData: null.
-
-Response Examples
-
-Example A — Note Action (update_note)
-
-codeJSON
-
-{
-  "transcript": "Append the meeting summary to the bottom.",
-  "action": "update_note",
-  "updatedData": {
-    "id": "note-uuid",
-    "title": "My Note Title",
-    "content": "Full updated note content string with the new summary appended.",
-    "createdAt": "2026-05-07T00:00:00.000Z",
-    "updatedAt": "2026-05-07T05:25:00.000Z"
+const response = await fetch('http://fastapi:8000/api/v1/voice/process', {
+  method: 'POST',
+  body: formData,
+  headers: {
+    // These two headers are REQUIRED for memory + user isolation:
+    'x-session-id': sessionId,      // Stable UUID, generated once per browser tab
+    'x-user-id': currentUser.id,     // From your auth session (Prisma User.id)
   },
-  "reply": null,
-  "success": true,
-  "message": "Note updated"
+});
+```
+
+**Session ID lifecycle:**
+- Generated on first voice interaction (or page load)
+- Stored in `sessionStorage` or React state — persists across tab reloads but NOT across tabs
+- Same session ID for all requests within that tab's lifetime
+- A new tab = a new session ID (isolated conversation)
+
+**User ID source:**
+- Must be the actual authenticated user's UUID from the `User` table
+- Never hardcode — always read from the current auth session
+- Unauthenticated users (if allowed) should omit the header (falls back to `"default"`)
+
+### 4.1 Form Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `audio` | File | Conditional | Audio blob. Accepted MIME: `audio/webm`, `audio/mp3`, `audio/mpeg`. Max 10 MB. Required if `transcript` is absent. |
+| `transcript` | String | Conditional | Pre-transcribed user speech. Required if `audio` is absent. At least one of `audio` or `transcript` must be present. |
+| `context_type` | String | **Yes** | One of: `NOTE`, `STACK`, `TASK`, `TASKS`, `CALENDAR`. Determines which tool schema the Resolver uses. |
+| `context_id` | String (UUID) | **Yes** | UUID of the active/focused context item. |
+| `cursor_position` | String (int) | No | Cursor index for NOTE context. Defaults to `"0"`. |
+| `note_state` | String (JSON) | Conditional | Required when `context_type=NOTE`. Shape: `{"id":"uuid","userId":"uuid","title":"...","content":"...","createdAt":"ISO8601","updatedAt":"ISO8601"}` |
+| `dynamic_schema` | String (JSON) | Conditional | Required when `context_type=STACK`. Shape: `[{"id":"col-uuid","name":"Column Name","type":"TEXT"}]`. `type` is non-nullable enum: `TEXT`, `INT`, `FLOAT`, `BOOLEAN`, `DATE`, `SELECT`. |
+| `task_context` | String (JSON) | Conditional | Used when `context_type=TASK`. Shape: `{"focusedTaskId":"uuid","focusedTaskTitle":"Task name"}` |
+| `packed_context` | String (JSON) | Recommended | **Preferred over individual context fields.** Full Context-Grabber payload from NextJS. Shape: `{"items":[{"type":"NOTE","id":"uuid","title":"...","content":"...","metadata":{...}}]}`. When present, `context_type` and `context_id` are inferred from the first item. Supports multi-item context for cross-referencing. |
+
+### 4.2 Complete TypeScript Request Builder
+
+```typescript
+// ── NextJS: buildFormData() ──────────────────────────────────
+// Call this in your API route or server action before fetching the FastAPI service.
+
+interface VoiceRequest {
+  audio?: Blob;                          // WebM/MP3 audio blob from MediaRecorder
+  transcript?: string;                   // Pre-transcribed text (alternative to audio)
+  packedContext?: PackedContext;         // Full Context-Grabber payload (PREFERRED)
+  // Legacy individual fields (ignored if packedContext is provided):
+  contextType?: 'NOTE' | 'STACK' | 'TASK' | 'TASKS' | 'CALENDAR';
+  contextId?: string;
+  cursorPosition?: number;
+  noteState?: NoteState;
+  dynamicSchema?: ColumnDef[];
+  taskContext?: TaskContext;
 }
 
-content is the complete new note string, not a diff. Next.js replaces the full note content on user confirmation.
+interface PackedContext {
+  items: ContextItem[];
+}
 
-Example B — Stack Action (add_stack_row)
+interface ContextItem {
+  type: 'NOTE' | 'STACK' | 'TASK' | 'TASKS' | 'CALENDAR';
+  id: string;
+  title?: string;
+  content?: string;
+  metadata?: Record<string, unknown>;
+  // STACK-specific:
+  columns?: ColumnDef[];
+  rows?: StackRow[];
+}
 
-codeJSON
+interface ColumnDef {
+  id: string;
+  name: string;
+  type: 'TEXT' | 'INT' | 'FLOAT' | 'BOOLEAN' | 'DATE' | 'SELECT';
+}
 
+function buildFormData(req: VoiceRequest, sessionId: string, userId: string): FormData {
+  const fd = new FormData();
+
+  if (req.audio) {
+    fd.append('audio', req.audio, 'audio.webm');
+  }
+  if (req.transcript) {
+    fd.append('transcript', req.transcript);
+  }
+
+  if (req.packedContext) {
+    fd.append('packed_context', JSON.stringify(req.packedContext));
+    // context_type + context_id are inferred from packed_context by FastAPI
+  } else {
+    fd.append('context_type', req.contextType ?? 'NOTE');
+    fd.append('context_id', req.contextId ?? '');
+    fd.append('cursor_position', String(req.cursorPosition ?? 0));
+
+    if (req.contextType === 'NOTE' && req.noteState) {
+      fd.append('note_state', JSON.stringify(req.noteState));
+    }
+    if (req.contextType === 'STACK' && req.dynamicSchema) {
+      fd.append('dynamic_schema', JSON.stringify(req.dynamicSchema));
+    }
+    if ((req.contextType === 'TASK' || req.contextType === 'TASKS') && req.taskContext) {
+      fd.append('task_context', JSON.stringify(req.taskContext));
+    }
+  }
+
+  return fd;
+}
+
+// Usage:
+const formData = buildFormData(
+  { audio: audioBlob, packedContext: contextGrabberPayload },
+  sessionId,    // from sessionStorage
+  currentUser.id // from NextAuth session
+);
+
+const res = await fetch('http://fastapi:8000/api/v1/voice/process', {
+  method: 'POST',
+  body: formData,
+  headers: {
+    'x-session-id': sessionId,
+    'x-user-id': currentUser.id,
+  },
+});
+```
+
+---
+
+## 5. Response Shape — FastAPI → Next.js
+
+All responses are `application/json`. HTTP 200 on success.
+
+### 5.0 Top-Level Envelope
+
+```typescript
+interface VoiceResponse {
+  transcript: string;           // The transcribed/processed user speech
+  action: ActionType;           // Which tool was invoked
+  success: boolean;             // Always true for 200 responses
+  message: string | null;       // Human-readable status (null when reply is present)
+  updatedData: object | null;   // Structured payload for the NextJS frontend
+  reply: string | null;         // Conversational text (null when updatedData is present)
+}
+
+type ActionType =
+  | 'update_note'
+  | 'add_stack_row'
+  | 'bulk_update_stack'
+  | 'update_cell'
+  | 'delete_row'
+  | 'manage_tasks'
+  | 'summarize_context'
+  | 'create_calendar_event'
+  | 'none';
+```
+
+**Mutual exclusivity rule:** `updatedData` and `reply` are never both populated. Action → `updatedData` set, `reply: null`. Conversational → `reply` set, `updatedData: null`.
+
+### 5.1 Action: `update_note` — Inline Diff Suggestion
+
+The AI returns ONLY the text to insert + where to insert it. **It does NOT return the full note content.** NextJS renders this as ghost text at the cursor position (like VS Code inline completions). User presses Tab to accept, Esc to dismiss.
+
+```typescript
+// Response shape:
 {
-  "transcript": "Add a new row for marketing budget, set amount to 5000.",
-  "action": "add_stack_row",
+  transcript: "thêm ghi chú cuộc họp vào cuối",
+  action: "update_note",
+  success: true,
+  message: "Note update suggested",
+  updatedData: {
+    id: string;              // Note UUID
+    diff: {
+      action_type: "append" | "insert_at_cursor";
+      content_to_insert: string;   // ONLY the new text — not the whole note
+      cursor_position: number;     // Where to insert (0 = beginning, len = append)
+      preview_surrounding: string; // "…context before││context after…" for ghost text preview
+    };
+  },
+  reply: null
+}
+```
+
+**Example:**
+```json
+{
+  "transcript": "thêm dòng 'Cần review trước thứ 6' vào cuối",
+  "action": "update_note",
+  "success": true,
+  "message": "Note update suggested",
   "updatedData": {
-    "id": "temp_row_abc123",
-    "stackId": "stack-uuid",
-    "data": {
-      "col-uuid-for-name": "Marketing Budget",
-      "col-uuid-for-amount": 5000
+    "id": "note-abc-123",
+    "diff": {
+      "action_type": "append",
+      "content_to_insert": "Cần review trước thứ 6",
+      "cursor_position": 842,
+      "preview_surrounding": "…kết thúc phiên họp lúc 5h chiều.││"
     }
   },
-  "reply": null,
-  "success": true,
-  "message": "Row added"
+  "reply": null
 }
+```
 
-data keys are column UUIDs, not column names. Next.js must not remap these. Value types match the column's DataType: INT/FLOAT → number, TEXT/DATE/SELECT → string, BOOLEAN → boolean.
+**NextJS rendering:**
+```typescript
+// Show as ghost text at cursor_position:
+// "…kết thúc phiên họp lúc 5h chiều.[Cần review trước thứ 6]"
+//                                        ^^^^^^^^^^^^^^^^^^^^^^^^
+//                                        ghost/grey text, Tab to accept
+```
 
-Example C — No Workspace Action (none)
+**NextJS on accept:**
+```typescript
+const { id, diff } = response.updatedData;
+const note = getNote(id);
+if (diff.action_type === 'append') {
+  note.content += '\n' + diff.content_to_insert;
+} else {
+  note.content = note.content.slice(0, diff.cursor_position)
+               + diff.content_to_insert
+               + note.content.slice(diff.cursor_position);
+}
+await prisma.note.update({ where: { id }, data: { content: note.content } });
+```
 
-codeJSON
+### 5.2 Action: `add_stack_row` — Ghost Row Suggestion
 
+```typescript
 {
-  "transcript": "Just testing the microphone.",
-  "action": "none",
-  "updatedData": null,
-  "reply": null,
-  "success": true,
-  "message": "No action needed"
+  transcript: "thêm dòng mới marketing budget 5000",
+  action: "add_stack_row",
+  success: true,
+  message: "Row suggested",
+  updatedData: {
+    id: string;                    // Temporary row ID ("temp_row_1717800000000")
+    stackId: string;               // Stack UUID
+    suggestionType: "ghost_row";   // NextJS: render as faded/ghost row at bottom of table
+    columnOrder: Array<{           // Strict schema column order — align cells by this
+      id: string;                  // Column UUID
+      name: string;                // Column display name
+      type: string;                // TEXT | INT | FLOAT | BOOLEAN | DATE | SELECT
+    }>;
+    data: Record<string, unknown>; // { [columnUuid]: value } — keys are COLUMN UUIDs
+  },
+  reply: null
 }
+```
 
-Example D — Conversational Reply
+**NextJS rendering:** Append a faded/translucent row at the bottom of the table. Cells are aligned by `columnOrder[].id`. Show an "Accept ✓" and "Dismiss ✗" button on hover. On accept → `prisma.stackRow.create()`.
 
-codeJSON
+### 5.3 Action: `bulk_update_stack` — Cell Diff Suggestion
 
+```typescript
 {
-  "transcript": "Can you summarize what I wrote?",
-  "action": "none",
-  "updatedData": null,
-  "reply": "Your note covers three main topics: the Q3 budget review, team allocation for the next sprint, and the pending client approval. The tone is mostly planning-focused with some open questions at the end.",
-  "success": true,
-  "message": null
+  transcript: "đổi tất cả trạng thái thành done",
+  action: "bulk_update_stack",
+  success: true,
+  message: "Update suggested for 3 rows",
+  updatedData: {
+    stackId: string;
+    suggestionType: "cell_diff";   // NextJS: highlight changed cells inline
+    columnOrder: Array<{id: string; name: string; type: string}>;
+    updates: Array<{
+      rowId: string;                      // Row UUID to update
+      data: Record<string, unknown>;      // { [columnUuid]: newValue } — only changed cells
+    }>;
+  },
+  reply: null
+}
+```
+
+**NextJS rendering:** For each row in `updates`, find the row by `rowId` and show the new value as an inline highlight within the cell. Old value strikethrough, new value in green. Accept per-row or bulk-accept.
+
+### 5.4 Action: `update_cell` — Single Cell Diff
+
+```typescript
+{
+  transcript: "đổi ô này thành 5000",
+  action: "update_cell",
+  success: true,
+  message: "Cell edit suggested",
+  updatedData: {
+    stackId: string;
+    suggestionType: "cell_diff";
+    rowId: string;       // Row UUID
+    columnId: string;    // Column UUID
+    value: unknown;      // New cell value
+  },
+  reply: null
+}
+```
+
+**NextJS rendering:** Highlight just the one cell with old→new value inline.
+
+### 5.5 Action: `delete_row` — Row Deletion Warning
+
+```typescript
+{
+  transcript: "xóa dòng này đi",
+  action: "delete_row",
+  success: true,
+  message: "Row deletion suggested",
+  updatedData: {
+    stackId: string;
+    suggestionType: "row_delete";  // NextJS: red highlight + strikethrough
+    rowId: string;                 // Row UUID to delete
+  },
+  reply: null
+}
+```
+
+**NextJS rendering:** Highlight the row in red with a warning icon. Require explicit confirmation before calling `prisma.stackRow.delete()` — this is irreversible.
+
+### 5.6 Action: `manage_tasks`
+
+```typescript
+{
+  transcript: "tạo task mua sữa ưu tiên cao hạn mai",
+  action: "manage_tasks",
+  success: true,
+  message: "Task creation suggested",   // or "Task update suggested" / "Task deletion suggested"
+  updatedData: {
+    suggestionType: "task_action";
+    action_type: "create" | "update" | "delete";
+    // ── For create/update (only include fields being changed): ──
+    title?: string;
+    description?: string;
+    status?: "TODO" | "IN_PROGRESS" | "DONE";
+    priority?: "LOW" | "MEDIUM" | "HIGH";
+    assignee?: string;
+    dueDate?: string;        // ISO 8601 UTC
+    parentId?: string;       // Parent task UUID (for subtasks)
+    // ── For update/delete: ──
+    task_id?: string;        // Target task UUID
+  },
+  reply: null
+}
+```
+
+**NextJS:** Show as a suggestion card with the proposed task fields. Only the fields present in `updatedData` are changing — don't overwrite other fields with defaults.
+
+### 5.8 Action: `create_calendar_event`
+
+```typescript
+{
+  transcript: "tạo lịch họp team ngày mai 2h chiều",
+  action: "create_calendar_event",
+  success: true,
+  message: "Calendar event suggested",
+  updatedData: {
+    suggestionType: "calendar_event";
+    title: string;
+    notes?: string;
+    startAt: string;       // ISO 8601 UTC
+    endAt: string;         // ISO 8601 UTC
+    allDay?: boolean;      // Default false
+    color?: string;        // Hex color, default "#5645d4"
+  },
+  reply: null
+}
+```
+
+### 5.9 Action: `none`
+
+Two sub-cases:
+
+**5.9a — Conversational reply (chitchat / Q&A):**
+```typescript
+{
+  transcript: "cảm ơn nhé",
+  action: "none",
+  success: true,
+  message: null,
+  updatedData: null,
+  reply: "Không có gì! Bạn cần tôi giúp gì thêm không?"  // ← Conversational
+}
+```
+
+**5.9b — No action recognized:**
+```typescript
+{
+  transcript: "just testing the mic",
+  action: "none",
+  success: true,
+  message: "No action recognized from command",
+  updatedData: null,
+  reply: null
+}
+```
+
+**NextJS logic:**
+```typescript
+if (response.action === 'none') {
+  if (response.reply) {
+    showSidePanel(response.reply);      // Conversational — show in AI panel
+  } else {
+    showToast(response.message);        // No action — brief notification only
+  }
+}
+```
+
+### 5.10 Context-Guidance Rejection
+
+When the user asks to modify something NOT in the provided context:
+
+```typescript
+{
+  transcript: "xóa task ABC đi",       // but no TASK in context
+  action: "none",
+  success: true,
+  message: null,
+  updatedData: null,
+  reply: "Please select the tabs or use @mentions in the text to add the relevant material to my context."
+}
+```
+
+**NextJS action:** Display this `reply` prominently — it tells the user HOW to fix the problem (select tab / use @mentions). Do NOT treat as an error.
+
+---
+
+## 6. Error Responses
+
+All errors return non-200 HTTP status codes with a JSON body:
+
+```typescript
+interface ErrorResponse {
+  error: string;  // Human-readable error message
+}
+```
+
+| Status | Meaning | When |
+|--------|---------|------|
+| **400** | Bad Request | Invalid `context_type`, invalid `packed_context` JSON, unsupported audio MIME, safety gate blocked |
+| **413** | Payload Too Large | Audio file exceeds 10 MB |
+| **422** | Unprocessable Entity | Missing both `audio` and `transcript` |
+| **500** | Internal Server Error | Resolver LLM failed, unexpected exception |
+| **502** | Bad Gateway | STT (Deepgram + Groq) or Resolver (Gemini + Groq) all providers failed |
+
+**NextJS error handling:**
+```typescript
+const res = await fetch('http://fastapi:8000/api/v1/voice/process', {
+  method: 'POST', body: formData,
+  headers: { 'x-session-id': sessionId, 'x-user-id': userId },
+});
+
+if (!res.ok) {
+  const err: ErrorResponse = await res.json();
+  if (res.status === 400 && err.error?.includes('not recognized')) {
+    showToast('Command blocked for security reasons');
+  } else if (res.status === 413) {
+    showToast('Audio too large — keep recordings under 10 seconds');
+  } else {
+    showToast(err.error ?? 'AI service unavailable');
+  }
+  return;
 }
 
-Conversational replies bypass the user confirmation gate entirely — they are read-only responses, no data changes. Next.js displays reply in the AI side-panel (a sliding panel from the right side of the workspace). The side-panel persists until the user closes it. No write queue entry is created. Toast notifications are reserved for system-level feedback only (e.g. "No action taken", "Command blocked").
+const data: VoiceResponse = await res.json();
+// ... handle action ...
+```
 
-Example E — Unsafe Input Blocked by Sentinel
+---
 
-This is not returned to the client. The client receives:
+## 8. NextJS Requirements for Surgical Diffs
 
-codeJSON
+For the AI to produce inline suggestions (not full-content replacements), NextJS must provide sufficient context. Below are the minimum data requirements per action type.
 
-{ "error": "Command not recognized as a workspace action." }
+### 8.1 For `update_note` (inline ghost text)
 
-HTTP status: 400. The actual reason from the Sentinel is logged server-side only and never exposed to the client.
+| Data Needed | Field | Why |
+|-------------|-------|-----|
+| Current note content | `note_state.content` or `packed_context.items[0].content` | AI needs to know surrounding text for accurate insertion position |
+| Cursor position | `cursor_position` (int) | Where the user's cursor is — insertion point for `insert_at_cursor` |
+| Note ID | `context_id` or `packed_context.items[0].id` | Which note to target |
 
-6. Scope — Implemented vs. Reserved
+**⚠️ If `note_state` is missing or `content` is empty:** The AI cannot produce a contextual diff. It will fall back to `action: "none"` with `reply: "Please open a note so I can see where to insert text."`
 
-Implemented in v1.0:
+### 8.2 For `update_cell` (precision cell edit)
 
-update_note — replace note content at cursor position or append
+| Data Needed | Field | Why |
+|-------------|-------|-----|
+| Focused cell info | `packed_context.items[0].metadata.editMode = "precision"` | Tells AI this is a single-cell edit |
+| Row ID | `metadata.focusedCell.rowId` | Which row |
+| Column ID | `metadata.focusedCell.columnId` | Which column |
+| Current value | `metadata.focusedCell.currentValue` | What's currently there (for context) |
 
-add_stack_row — add a new row to a stack with schema-validated data
+**⚠️ Without precision mode metadata:** The AI treats the stack as whole-table context and may produce `bulk_update_stack` instead of the surgical `update_cell`.
 
-none — no workspace action taken
+### 8.3 For `add_stack_row` (ghost row)
 
-Conversational reply — natural language response using workspace context
+| Data Needed | Field | Why |
+|-------------|-------|-----|
+| Column schema | `dynamic_schema` or `packed_context.items[0].columns` | AI needs column names + types to fill values correctly |
+| Stack ID | `context_id` or `packed_context.items[0].id` | Which stack to target |
 
-Reserved for v1.1 (not implemented, not returned):
+### 8.4 General Rule
 
-update_stack_row — modify an existing row
+```
+MORE CONTEXT → BETTER SURGICAL DIFFS
+LESS CONTEXT → FALLBACK TO CONVERSATIONAL REPLY
+```
 
-delete_stack_row — remove a row
+If NextJS sends only `context_type` + `context_id` without the actual content/schema, the AI can only respond conversationally — it cannot produce surgical diffs because it doesn't know what's in the document.
 
-Next.js must not handle update_stack_row or delete_stack_row in v1.0. If either appears in a response unexpectedly, treat it as an error.
+---
+
+## 9. Scope — Full Action Matrix (v2.4)
+
+| Action | `suggestionType` | Context Required | Rendering | Reversible |
+|--------|-----------------|-----------------|-----------|------------|
+| `update_note` | `diff` (inline) | NOTE + content + cursor | Ghost text at cursor | Yes (undo) |
+| `add_stack_row` | `ghost_row` | STACK + schema | Faded row at bottom | Yes (delete) |
+| `bulk_update_stack` | `cell_diff` | STACK + schema | Inline cell highlights | Hard |
+| `update_cell` | `cell_diff` | STACK + precision metadata | Single cell highlight | Yes |
+| `delete_row` | `row_delete` | STACK | Red strikethrough | **No** — double-confirm |
+| `manage_tasks` | `task_action` | TASK / TASKS | Suggestion card | Depends |
+| `summarize_context` | — (in `reply`) | Any | AI side-panel | N/A (read-only) |
+| `create_calendar_event` | `calendar_event` | CALENDAR | Event preview card | Yes (delete) |
+| `none` | — | None | Toast / side-panel | N/A |
+
+---
+
+## 10. Health Endpoint
 
 7. Health Endpoint
 

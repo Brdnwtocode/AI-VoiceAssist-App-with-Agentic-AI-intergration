@@ -104,3 +104,128 @@ class ResolverLLMOutput(BaseModel):
         return v if isinstance(v, dict) else {}
 
     model_config = ConfigDict(extra="ignore")
+
+
+# ── Multi-Expert Orchestration Models ─────────────────────────────────────
+
+class SafetyVerdict(BaseModel):
+    """Output from the safety gate (absorbed sentinel)."""
+    safe: bool
+    reason: str = ""
+
+
+class ComplexityAssessment(BaseModel):
+    """Router decision: should the orchestrator fan out to all experts?"""
+    complexity: Literal["simple", "complex"]
+    reasoning: str = ""
+
+
+class ContrarianOutput(BaseModel):
+    """Contrarian expert: challenges assumptions, flags risks, breaks sycophancy."""
+    critique: str = Field(..., description="What the primary interpretation might be missing")
+    risk: Literal["low", "medium", "high"] = Field(..., description="Risk level of acting on the primary interpretation")
+    alternative_action: Optional[str] = Field(default=None, description="Alternative action to consider, if any")
+
+
+class ResearchOutput(BaseModel):
+    """Research expert: grounds the command against workspace state."""
+    relevant_context: str = Field(default="", description="Key facts from workspace state relevant to this command")
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Confidence that workspace state has been fully considered")
+    data_gaps: List[str] = Field(default_factory=list, description="Information gaps that prevent confident resolution")
+
+
+class ConversationOutput(BaseModel):
+    """Conversation expert: extracts intent, tone, and language cues."""
+    intent: str = Field(..., description="The user's underlying intent in natural language")
+    tone: Literal["command", "query", "chitchat"] = Field(default="command")
+    language: Literal["vi", "en", "mixed"] = Field(default="vi")
+    has_ambiguity: bool = Field(default=False, description="Whether the command has multiple plausible interpretations")
+
+
+class DeliberationResult(BaseModel):
+    """Aggregated output from all experts after fan-out/fan-in."""
+    contrarian: Optional[ContrarianOutput] = None
+    research: Optional[ResearchOutput] = None
+    conversation: Optional[ConversationOutput] = None
+    synthesis_notes: str = Field(default="", description="Key points for the Resolver to consider")
+
+
+class OrchestratorDecision(BaseModel):
+    """Final decision from the Master Orchestrator."""
+    should_deliberate: bool = Field(..., description="Whether multi-expert deliberation was performed")
+    complexity: str = Field(default="simple")
+    safety_verdict: SafetyVerdict = Field(default_factory=lambda: SafetyVerdict(safe=True, reason=""))
+    deliberation: Optional[DeliberationResult] = None
+    directive: str = Field(default="", description="Instructions passed to the Resolver for final synthesis")
+
+
+# ── Expert Intermediate Reasoning Models ──────────────────────────────────
+
+class ContrarianReasoning(BaseModel):
+    """Intermediate reasoning trace from the Contrarian expert's structured template."""
+    deconstructed_command: str = Field(default="", description="How the command was parsed")
+    edge_cases_considered: List[str] = Field(default_factory=list, description="Edge cases evaluated")
+    sycophancy_risks: List[str] = Field(default_factory=list, description="Sycophancy patterns detected")
+    risk_assessment: str = Field(default="", description="Risk level rationale")
+
+
+class ResearchReasoning(BaseModel):
+    """Intermediate reasoning trace from the Research expert's grounding template."""
+    workspace_inventory: str = Field(default="", description="What data was found in workspace")
+    entity_mapping: Dict[str, str] = Field(default_factory=dict, description="User entities → workspace data mapping")
+    web_search_performed: bool = Field(default=False)
+    web_search_query: Optional[str] = Field(default=None)
+    web_results_count: int = Field(default=0)
+    confidence_rationale: str = Field(default="", description="Why the confidence score was assigned")
+
+
+class ConversationReasoning(BaseModel):
+    """Intermediate reasoning trace from the Conversation expert's analysis."""
+    lang_detection: Dict[str, Any] = Field(default_factory=dict)
+    tone_classification: Dict[str, Any] = Field(default_factory=dict)
+    stt_corrections_applied: List[str] = Field(default_factory=list)
+    ambiguities_detected: List[str] = Field(default_factory=list)
+    intent_rationale: str = Field(default="", description="How the intent was derived")
+
+
+# ── Planning Node Models ──────────────────────────────────────────────────
+
+class PlanStep(BaseModel):
+    """A single step in the execution plan."""
+    step: int = Field(..., description="Step number (1-based)")
+    action: str = Field(..., description="The action to take: update_note, add_stack_row, manage_tasks, etc.")
+    description: str = Field(..., description="What this step accomplishes in natural language")
+    params_hint: Dict[str, Any] = Field(default_factory=dict, description="Hint for what params to include")
+    depends_on: List[int] = Field(default_factory=list, description="Step numbers this step depends on (empty for independent steps)")
+    context_required: str = Field(default="", description="What context data this step needs")
+
+
+class ExecutionPlan(BaseModel):
+    """Structured execution plan produced by the Planning Node."""
+    overall_goal: str = Field(..., description="The user's overall goal in one clear sentence")
+    reasoning: str = Field(default="", description="Why this plan structure was chosen")
+    steps: List[PlanStep] = Field(default_factory=list, description="Ordered execution steps")
+    is_multi_step: bool = Field(default=False, description="Whether this is truly multi-step or could be handled in one action")
+    fallback_action: str = Field(default="none", description="What to do if planning fails or is unnecessary")
+
+
+# ── Reflection Pattern Models ─────────────────────────────────────────────
+
+class ReflectionOutput(BaseModel):
+    """Output from the Reflection Node — critiques the Resolver's output."""
+    score: float = Field(default=1.0, ge=0.0, le=1.0, description="Quality score: 1.0 = perfect, 0.0 = unusable")
+    issues: List[str] = Field(default_factory=list, description="Specific problems found in the resolver output")
+    suggestions: List[str] = Field(default_factory=list, description="Concrete suggestions for improvement")
+    needs_refinement: bool = Field(default=False, description="Whether the resolver should retry with these suggestions")
+    critique_summary: str = Field(default="", description="One-sentence summary of the reflection")
+
+
+class ReflectionReasoning(BaseModel):
+    """Trace of the reflection node's decision process."""
+    action_valid: bool = Field(default=True)
+    params_complete: bool = Field(default=True)
+    context_respected: bool = Field(default=True)
+    reply_appropriate: bool = Field(default=True)
+    hallutination_detected: bool = Field(default=False)
+    iteration: int = Field(default=0, description="Which refinement iteration this is (0 = first pass)")
+    threshold_met: bool = Field(default=True)

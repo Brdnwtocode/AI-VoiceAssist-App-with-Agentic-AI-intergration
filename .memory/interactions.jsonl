@@ -1,0 +1,1 @@
+{"session_id": "test-session-1", "timestamp": "2026-06-06T14:21:20.103509+00:00", "transcript": "thêm task", "context_type": "TASK", "action": "create_task", "params": {}, "reply": null, "language": "vi", "complexity": "simple", "duration_ms": 1200, "success": true}

@@ -48,6 +48,60 @@ def data_type_to_optional(dtype: str) -> Any:
     return mapping.get(dtype.upper(), Optional[str])
 
 
+def fix_llm_output(raw_json: dict) -> dict:
+    """
+    Post-process LLM JSON output to fix common mistakes before Pydantic validation.
+    
+    Fixes:
+    - Invalid action_type values (e.g., "insert_at_top" -> "insert_at_cursor")
+    - Missing required fields
+    - Common typos in field names
+    """
+    if not isinstance(raw_json, dict):
+        return raw_json
+    
+    action = raw_json.get("action")
+    params = raw_json.get("params", {})
+    
+    # Fix update_note action_type
+    if action == "update_note" and isinstance(params, dict):
+        action_type = params.get("action_type", "")
+        
+        # Map invalid values to valid ones
+        action_type_mapping = {
+            "insert_at_top": "insert_at_cursor",
+            "insert_top": "insert_at_cursor",
+            "top": "insert_at_cursor",
+            "insert_at_beginning": "insert_at_cursor",
+            "beginning": "insert_at_cursor",
+            "insert": "insert_at_cursor",
+            "prepend": "insert_at_cursor",
+            # Keep valid values
+            "append": "append",
+            "insert_at_cursor": "insert_at_cursor",
+        }
+        
+        if action_type in action_type_mapping:
+            fixed_type = action_type_mapping[action_type]
+            if fixed_type != action_type:
+                logger.warning(
+                    "[fix_llm_output] Fixed action_type: '%s' -> '%s'",
+                    action_type, fixed_type
+                )
+                params["action_type"] = fixed_type
+                raw_json["params"] = params
+        else:
+            # Default to "append" if completely invalid
+            logger.warning(
+                "[fix_llm_output] Unknown action_type: '%s', defaulting to 'append'",
+                action_type
+            )
+            params["action_type"] = "append"
+            raw_json["params"] = params
+    
+    return raw_json
+
+
 @lru_cache(maxsize=512)
 def get_dynamic_model(schema_str: str) -> Type[BaseModel]:
     """LRU-cached dynamic Pydantic model for STACK row params (schema_str = JSON column array)."""
@@ -78,7 +132,14 @@ def clean_json_output(raw_output: str) -> dict:
     start, end = s.find("{"), s.rfind("}")
     if start != -1 and end != -1 and end > start:
         s = s[start : end + 1]
-    return json.loads(s)
+    
+    parsed = json.loads(s)
+    
+    # Fix common LLM output mistakes before returning
+    if isinstance(parsed, dict):
+        parsed = fix_llm_output(parsed)
+    
+    return parsed
 
 
 def build_column_mapping(columns: List[ColumnDef]) -> Dict[str, str]:
@@ -298,23 +359,75 @@ def build_note_payload(
     note_data: dict,
     cursor_position: int,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str]]:
+    """Build a surgical diff payload for note updates.
+
+    Instead of returning the ENTIRE note content (old behavior), returns only
+    the proposed insertion + surrounding context. NextJS renders this as an
+    inline suggestion (ghost text) at the cursor position — like VS Code's
+    inline completions. The user accepts (Tab) or dismisses (Esc).
+
+    Response shape:
+    {
+      "id": "note-uuid",
+      "diff": {
+        "action_type": "append" | "insert_at_cursor",
+        "content_to_insert": "the new text",
+        "cursor_position": 42,
+        "preview_surrounding": "…context before││context after…"
+      }
+    }
+    """
+    import re as _re
+
     params = nlu_result["params"]
     content_to_insert = params["content_to_insert"]
     action_type = params["action_type"]
-    current_content = note_data["content"]
+    current_content = note_data.get("content", "")
+
+    def _clean_preview(text: str) -> str:
+        """Sanitize markdown/HTML for a clean single-line preview snippet."""
+        # Strip HTML tags like <br />, <div>, etc.
+        text = _re.sub(r'<[^>]+>', '', text)
+        # Collapse whitespace (newlines, tabs, multiple spaces) into single spaces
+        text = _re.sub(r'\s+', ' ', text)
+        return text.strip()
+
+    # Build preview: 40 chars before + marker + 40 chars after insertion point
+    preview_before = ""
+    preview_after = ""
+    insert_pos = cursor_position
+
     if action_type == "append":
-        new_content = current_content + "\n" + content_to_insert
+        insert_pos = len(current_content)
+        raw_before = current_content[-60:] if len(current_content) > 60 else current_content
+        preview_before = _clean_preview(raw_before)
+        preview_after = ""
     else:
         pos = max(0, min(int(cursor_position), len(current_content)))
-        new_content = current_content[:pos] + content_to_insert + current_content[pos:]
+        insert_pos = pos
+        raw_before = current_content[max(0, pos - 40):pos]
+        raw_after = current_content[pos:pos + 40]
+        preview_before = _clean_preview(raw_before)
+        preview_after = _clean_preview(raw_after)
+
+    # Join with cursor marker — preview_before + "││" + preview_after
+    preview = (preview_before + "││" + preview_after).strip()
+
+    # If the cleaned preview is empty (e.g., only whitespace/HTML in original),
+    # provide a minimal fallback so the frontend still has context.
+    if not preview_before and not preview_after:
+        preview = "││"
+
     updated_data = {
         "id": note_data["id"],
-        "title": note_data["title"],
-        "content": new_content,
-        "createdAt": note_data["createdAt"],
-        "updatedAt": utc_iso_z(),
+        "diff": {
+            "action_type": action_type,
+            "content_to_insert": content_to_insert,
+            "cursor_position": insert_pos,
+            "preview_surrounding": preview[:200],
+        },
     }
-    return updated_data, "Note updated", None
+    return updated_data, "Note update suggested", None
 
 
 def build_stack_payload(
@@ -322,36 +435,49 @@ def build_stack_payload(
     columns: List[ColumnDef],
     context_id: str,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str]]:
+    """Build a ghost-row suggestion payload for stack inserts.
+
+    Returns ONLY the proposed row data + column ordering metadata.
+    NextJS renders this as a ghost/faded row at the bottom of the table.
+    The user accepts (click) or dismisses.
+
+    Column values are mapped from names → UUIDs. Column ordering follows
+    the schema strictly so NextJS can align cells without guessing.
+    """
     params = nlu_result["params"]
     col_mapping = build_column_mapping(columns)
+
+    # Build ordered data: follow column schema order strictly
+    ordered_columns: List[Dict[str, str]] = []
     data: Dict[str, Any] = {}
-    for col_name, value in params.items():
-        if value is None:
-            continue
-        col_id = col_mapping.get(col_name)
-        if col_id:
-            data[col_id] = value
-        else:
-            logger.warning("Column name '%s' not in schema, ignoring", col_name)
+    for col in columns:
+        ordered_columns.append({"id": col.id, "name": col.name, "type": col.type})
+        if col.name in params and params[col.name] is not None:
+            data[col.id] = params[col.name]
+
     row_id = f"temp_row_{int(time.time() * 1000)}"
     updated_data = {
         "id": row_id,
         "stackId": context_id,
-        "data": data,
+        "suggestionType": "ghost_row",
+        "columnOrder": ordered_columns,  # Schema order — NextJS aligns cells by this
+        "data": data,                     # { [columnUuid]: value }
     }
-    return updated_data, "Row added", None
+    return updated_data, "Row suggested", None
 
 
 def build_task_payload(
     nlu_result: dict,
     task_context_data: dict,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str]]:
+    """Build task creation suggestion payload (create_task action)."""
     updated_data = dict(nlu_result["params"])
     if task_context_data and not updated_data.get("parentId"):
         focused_id = task_context_data.get("focusedTaskId")
         if focused_id:
             updated_data["parentId"] = focused_id
-    return updated_data, "Task created", None
+    updated_data["suggestionType"] = "task_action"
+    return updated_data, "Task creation suggested", None
 
 
 def build_bulk_update_stack_payload(
@@ -359,8 +485,19 @@ def build_bulk_update_stack_payload(
     columns: List[ColumnDef],
     context_id: str,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str]]:
+    """Build a surgical bulk-update payload for stack rows.
+
+    Each update targets a specific row + specific columns. Column ordering
+    metadata is included so NextJS can render diffs cell-by-cell.
+    """
     params = nlu_result["params"]
     col_mapping = build_column_mapping(columns)
+
+    # Column order reference for NextJS
+    ordered_columns: List[Dict[str, str]] = [
+        {"id": col.id, "name": col.name, "type": col.type} for col in columns
+    ]
+
     mapped_updates = []
     for item in params.get("updates", []):
         row_id = item.get("row_id")
@@ -375,19 +512,25 @@ def build_bulk_update_stack_payload(
             else:
                 logger.warning("Column name '%s' not in schema, ignoring", col_name)
         mapped_updates.append({"rowId": row_id, "data": mapped_data})
-    
+
     updated_data = {
         "stackId": context_id,
+        "suggestionType": "cell_diff",
+        "columnOrder": ordered_columns,
         "updates": mapped_updates,
     }
-    return updated_data, f"Updated {len(mapped_updates)} rows", None
+    return updated_data, f"Update suggested for {len(mapped_updates)} rows", None
 
 
 def build_update_cell_payload(
     nlu_result: dict,
     context_id: str,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str]]:
-    """Build payload for single-cell precision edit (update_cell action)."""
+    """Build payload for single-cell precision edit (update_cell action).
+
+    Surgical: targets exactly one cell by rowId + columnId.
+    NextJS highlights the cell with the proposed new value inline.
+    """
     params = nlu_result["params"]
     row_id = params.get("row_id", "")
     column_id = params.get("column_id", "")
@@ -395,26 +538,31 @@ def build_update_cell_payload(
 
     updated_data = {
         "stackId": context_id,
+        "suggestionType": "cell_diff",
         "rowId": row_id,
         "columnId": column_id,
         "value": value,
     }
-    return updated_data, "Cell updated", None
+    return updated_data, "Cell edit suggested", None
 
 
 def build_delete_row_payload(
     nlu_result: dict,
     context_id: str,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str]]:
-    """Build payload for row deletion (delete_row action)."""
+    """Build payload for row deletion suggestion (delete_row action).
+
+    NextJS highlights the row in red/with a strikethrough until confirmed.
+    """
     params = nlu_result["params"]
     row_id = params.get("row_id", "")
 
     updated_data = {
         "stackId": context_id,
+        "suggestionType": "row_delete",
         "rowId": row_id,
     }
-    return updated_data, "Row deleted", None
+    return updated_data, "Row deletion suggested", None
 
 
 def build_manage_tasks_payload(
@@ -423,20 +571,21 @@ def build_manage_tasks_payload(
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str]]:
     updated_data = dict(nlu_result["params"])
     action_type = updated_data.get("action_type")
-    
+
     if action_type == "create":
         if task_context_data and not updated_data.get("parentId"):
             focused_id = task_context_data.get("focusedTaskId")
             if focused_id:
                 updated_data["parentId"] = focused_id
-        msg = "Task created"
+        msg = "Task creation suggested"
     elif action_type == "update":
-        msg = "Task updated"
+        msg = "Task update suggested"
     elif action_type == "delete":
-        msg = "Task deleted"
+        msg = "Task deletion suggested"
     else:
-        msg = "Task action processed"
-        
+        msg = "Task action suggested"
+
+    updated_data["suggestionType"] = "task_action"
     return updated_data, msg, None
 
 
@@ -450,7 +599,9 @@ def build_summarize_context_payload(
 def build_calendar_payload(
     nlu_result: dict,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str]]:
-    return dict(nlu_result["params"]), "Calendar event created", None
+    data = dict(nlu_result["params"])
+    data["suggestionType"] = "calendar_event"
+    return data, "Calendar event suggested", None
 
 
 def build_none_payload(

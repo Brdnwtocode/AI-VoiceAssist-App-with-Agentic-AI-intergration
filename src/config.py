@@ -20,9 +20,26 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_CONTEXTS = ("NOTE", "STACK", "TASK", "CALENDAR", "TASKS")
 ALLOWED_MIME_TYPES = {"audio/webm", "audio/mp3", "audio/mpeg"}
 RESOLVER_PRIMARY = "gemini/gemini-2.5-flash"
-RESOLVER_FALLBACK = "groq/llama-3.3-70b-versatile"
+# Fallback chain: OpenRouter first, then Groq as last resort
+RESOLVER_FALLBACKS = [
+    "openrouter/openai/gpt-oss-120b:free",
+    "groq/llama-3.3-70b-versatile",
+]
 SENTINEL_MODEL = "groq/llama-3.1-8b-instant"
+
+# ── Multi-Expert Orchestration Config ─────────────────────────────────────
+# Experts use fast 8B models for structured short outputs (~300-800ms each).
+# The Resolver (Gemini 2.5 Flash) synthesizes their findings.
+# This keeps total latency under budget: safety(~300ms) + router(~200ms)
+# + experts(parallel ~500ms) + resolver(~1.2s) ≈ 2.2s after STT.
+EXPERT_MODEL = "groq/llama-3.1-8b-instant"
+EXPERT_TIMEOUT = 15.0  # Experts should be fast — tight timeout
+
 LLM_TIMEOUT = 30.0
+
+# ── Neon PostgreSQL (long-term memory) ──
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+DB_ENABLED = bool(DATABASE_URL and DATABASE_URL != "postgresql://neondb_owner:your_password@ep-your-project.us-east-2.aws.neon.tech/neondb?sslmode=require")
 
 MOCK_OPENAI = os.getenv("MOCK_OPENAI", "").strip().lower() in ("1", "true", "yes")
 
@@ -37,13 +54,30 @@ router = Router(model_list=[
         "model_name": "resolver",
         "litellm_params": {
             "model": "gemini/gemini-2.5-flash",
-            "fallbacks": ["groq/llama-3.3-70b-versatile"]
+            "fallbacks": [
+                "openrouter/openai/gpt-oss-120b:free",
+                "groq/llama-3.3-70b-versatile"
+            ]
+        }
+    },
+    {
+        "model_name": "openrouter/openai/gpt-oss-120b:free",
+        "litellm_params": {
+            "model": "openrouter/openai/gpt-oss-120b:free",
+            "api_key": os.environ.get("OPENROUTER_API_KEY")
         }
     },
     {
         "model_name": "groq/llama-3.3-70b-versatile",
         "litellm_params": {
             "model": "groq/llama-3.3-70b-versatile"
+        }
+    },
+    {
+        "model_name": "expert",
+        "litellm_params": {
+            "model": "groq/llama-3.1-8b-instant",
+            "fallbacks": ["groq/llama-3.3-70b-versatile"]
         }
     },
     {

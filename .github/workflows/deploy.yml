@@ -1,0 +1,74 @@
+name: CI/CD Deploy to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Copy files to EC2 via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          port: 22
+          source: ".,!venv,!.git,!.github,!.idea,!.junie"
+          target: "/home/${{ secrets.SSH_USERNAME }}/voice-ai-app"
+          rm: false  # Do not delete existing files in target dir before copying
+
+      - name: Run Deploy Script via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+          SONIOX_API_KEY: ${{ secrets.SONIOX_API_KEY }}
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          port: 22
+          envs: OPENAI_API_KEY,ALLOWED_ORIGINS,SONIOX_API_KEY,DEEPGRAM_API_KEY,GROQ_API_KEY,GEMINI_API_KEY,OPENROUTER_API_KEY,DATABASE_URL
+          script: |
+            set -e
+            cd /home/${{ secrets.SSH_USERNAME }}/voice-ai-app
+            
+            # Create or update the .env file with the environment variables from GitHub Secrets
+            cat << EOF > .env
+            OPENAI_API_KEY="$OPENAI_API_KEY"
+            ALLOWED_ORIGINS="$ALLOWED_ORIGINS"
+            SONIOX_API_KEY="$SONIOX_API_KEY"
+            DEEPGRAM_API_KEY="$DEEPGRAM_API_KEY"
+            GROQ_API_KEY="$GROQ_API_KEY"
+            GEMINI_API_KEY="$GEMINI_API_KEY"
+            OPENROUTER_API_KEY="$OPENROUTER_API_KEY"
+            DATABASE_URL="$DATABASE_URL"
+            EOF
+            
+            # Check if docker is installed, if not, output instructions/error
+            if ! command -v docker &> /dev/null; then
+              echo "ERROR: docker is not installed on the server. Please run the installation commands provided."
+              exit 1
+            fi
+            
+            # Run docker compose rebuild and restart
+            docker compose down
+            docker compose up --build -d
+            
+            # Display running containers
+            docker compose ps

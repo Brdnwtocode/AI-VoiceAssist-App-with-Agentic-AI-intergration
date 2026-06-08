@@ -1,0 +1,15 @@
+.git
+.github
+.idea
+.junie
+.env
+venv
+env
+*.pyc
+__pycache__
+db.sqlite3
+docs
+LICENSE
+README.md
+run_tests.bat
+run_tests.sh

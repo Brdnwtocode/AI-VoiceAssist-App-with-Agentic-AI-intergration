@@ -45,6 +45,7 @@ jobs:
           port: 22
           envs: OPENAI_API_KEY,ALLOWED_ORIGINS,SONIOX_API_KEY,DEEPGRAM_API_KEY,GROQ_API_KEY,GEMINI_API_KEY,OPENROUTER_API_KEY,DATABASE_URL
           script: |
+            set -e
             cd /home/${{ secrets.SSH_USERNAME }}/voice-ai-app
             
             # Create or update the .env file with the environment variables from GitHub Secrets

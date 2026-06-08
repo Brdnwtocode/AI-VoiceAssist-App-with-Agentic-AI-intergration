@@ -28,17 +28,36 @@ jobs:
 
       - name: Run Deploy Script via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+          SONIOX_API_KEY: ${{ secrets.SONIOX_API_KEY }}
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           port: 22
+          envs: OPENAI_API_KEY,ALLOWED_ORIGINS,SONIOX_API_KEY,DEEPGRAM_API_KEY,GROQ_API_KEY,GEMINI_API_KEY,OPENROUTER_API_KEY,DATABASE_URL
           script: |
             cd /home/${{ secrets.SSH_USERNAME }}/voice-ai-app
             
             # Create or update the .env file with the environment variables from GitHub Secrets
-            echo "${{ secrets.ENV_FILE }}" > .env
+            cat << EOF > .env
+            OPENAI_API_KEY="$OPENAI_API_KEY"
+            ALLOWED_ORIGINS="$ALLOWED_ORIGINS"
+            SONIOX_API_KEY="$SONIOX_API_KEY"
+            DEEPGRAM_API_KEY="$DEEPGRAM_API_KEY"
+            GROQ_API_KEY="$GROQ_API_KEY"
+            GEMINI_API_KEY="$GEMINI_API_KEY"
+            OPENROUTER_API_KEY="$OPENROUTER_API_KEY"
+            DATABASE_URL="$DATABASE_URL"
+            EOF
             
             # Check if docker is installed, if not, output instructions/error
             if ! command -v docker &> /dev/null; then

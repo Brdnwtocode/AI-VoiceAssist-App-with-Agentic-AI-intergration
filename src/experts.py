@@ -233,22 +233,25 @@ async def run_complexity_router(
 # ═══════════════════════════════════════════════════════════════════════════
 
 CONTRARIAN_SYSTEM = """You are the CONTRARIAN expert in a multi-agent workspace assistant.
-Your sole job is to challenge the most obvious interpretation of the user's command.
+Your sole job is to challenge the execution plan's assumptions and flag risks.
 
 You will be given a structured CRITICAL REASONING FRAMEWORK to follow step by step.
 Work through each step in your thinking, then output ONLY the final JSON.
 
+If an EXECUTION PLAN is provided, critique EACH step — reference step numbers.
+If no plan is provided, critique the most obvious interpretation of the command.
+
 Output ONLY a JSON object:
 {
-  "critique": "What the primary interpretation might be missing — what could go wrong?",
+  "critique": "Per-step critique: what could go wrong? Reference step numbers if plan provided.",
   "risk": "low" | "medium" | "high",
   "alternative_action": "A different action the user might actually mean, or null"
 }
 
 Key principles:
 - Challenge sycophancy: the base model defaults to agreeing. You exist to break that.
-- Flag data loss, wrong targets, ambiguous references, missing prerequisites.
-- "risk": "high" for irreversible changes (delete, overwrite, bulk mutate).
+- Flag data loss, wrong targets, ambiguous references, missing prerequisites per step.
+- "risk": "high" for irreversible changes (delete, overwrite, bulk mutate) in any step.
 - "risk": "medium" for suboptimal but reversible actions.
 - "risk": "low" for straightforward, safe commands.
 - Only suggest alternative_action if genuinely plausible — don't fabricate concerns.
@@ -263,14 +266,18 @@ async def run_contrarian(
     dynamic_schema: Optional[str],
     task_context_data: Optional[str],
     processed_context: Optional[dict],
+    execution_plan = None,  # Optional[ExecutionPlan] — from Planner Node (runs first)
 ) -> tuple[ContrarianOutput, ContrarianReasoning]:
     """Challenge assumptions and flag risks using structured critical reasoning.
 
-    Now tool-augmented:
+    NOW PLAN-AWARE: when execution_plan is provided, critiques each plan step.
+
+    Tool-augmented:
     1. Extracts workspace facts (real data, not LLM hallucination)
     2. Generates edge cases programmatically (not from prompt)
     3. Detects sycophancy risks via pattern matching
     4. Builds a structured reasoning template for the LLM
+    5. If plan provided: critiques each step for risks
     """
     # ── Tool 1: Extract workspace facts ──
     workspace_facts = extract_workspace_facts(
@@ -286,14 +293,16 @@ async def run_contrarian(
     # ── Tool 3: Detect sycophancy risks ──
     sycophancy_risks = detect_sycophancy_risks(transcript, context_type, workspace_facts)
 
-    # ── Tool 4: Build structured critical reasoning template ──
+    # ── Tool 4: Build structured critical reasoning template (WITH PLAN) ──
     reasoning_template = build_contrarian_template(
         transcript, context_type, workspace_facts,
+        execution_plan=execution_plan,
     )
 
     # ── Assemble reasoning trace ──
+    plan_info = f", plan_steps={len(execution_plan.steps)}" if execution_plan else ""
     reasoning = ContrarianReasoning(
-        deconstructed_command=f"context={context_type}, transcript_len={len(transcript)}",
+        deconstructed_command=f"context={context_type}, transcript_len={len(transcript)}{plan_info}",
         edge_cases_considered=edge_cases[:8],
         sycophancy_risks=sycophancy_risks,
         risk_assessment=f"Profile: {json.dumps(assess_action_risk('unknown'))}",
@@ -328,11 +337,14 @@ Your job is to ground the user's command against actual workspace state.
 You will be given a structured RESEARCH GROUNDING FRAMEWORK to follow step by step.
 Work through each step, then output ONLY the final JSON.
 
+If an EXECUTION PLAN is provided, ground EACH step — reference step numbers in data gaps.
+If no plan is provided, ground the raw command directly.
+
 Output ONLY a JSON object:
 {
-  "relevant_context": "Key facts from workspace state that are relevant to this command. Be specific — mention actual values, row counts, column names, etc.",
+  "relevant_context": "Key facts from workspace state that are relevant to this command. Be specific — mention actual values, row counts, column names, etc. Reference step numbers if plan provided.",
   "confidence": 0.0 to 1.0,
-  "data_gaps": ["List of information gaps that prevent confident resolution"]
+  "data_gaps": ["List of information gaps that prevent confident resolution. Tag each gap with step number if plan provided: 'Step 2 needs: ...'"]
 }
 
 Key principles:
@@ -342,7 +354,7 @@ Key principles:
   * 0.9-1.0: All referenced data found in workspace (or web), action is clear
   * 0.5-0.8: Some data found, but gaps or ambiguities exist
   * 0.0-0.4: Critical data missing — cannot ground the command
-- data_gaps: list SPECIFIC missing pieces (e.g., "No stack schema provided", "Note content empty")
+- data_gaps: list SPECIFIC missing pieces per step (e.g., "Step 2 (add_stack_row): No stack schema provided")
 - The user speaks Vietnamese or English."""
 
 
@@ -353,14 +365,18 @@ async def run_research(
     dynamic_schema: Optional[str],
     task_context_data: Optional[str],
     processed_context: Optional[dict],
+    execution_plan = None,  # Optional[ExecutionPlan] — from Planner Node (runs first)
 ) -> tuple[ResearchOutput, ResearchReasoning]:
     """Ground the command against workspace state + optional web search.
 
-    Now tool-augmented:
+    NOW PLAN-AWARE: when execution_plan is provided, grounds each step.
+
+    Tool-augmented:
     1. Extracts workspace facts programmatically (not LLM hallucination)
     2. Optionally performs web search for research/external queries
     3. Formats workspace state for LLM consumption
     4. Builds a structured grounding template for the LLM
+    5. If plan provided: verifies data availability per step
     """
     # ── Tool 1: Extract workspace facts ──
     workspace_facts = extract_workspace_facts(
@@ -392,9 +408,10 @@ async def run_research(
         web_search_performed = True
         web_count = 3 if "[Web search returned no results]" not in web_results else 0
 
-    # ── Tool 3: Build structured grounding template ──
+    # ── Tool 3: Build structured grounding template (WITH PLAN) ──
     reasoning_template = build_research_template(
         transcript, context_type, workspace_facts, web_results,
+        execution_plan=execution_plan,
     )
 
     # ── Assemble reasoning trace ──
@@ -446,6 +463,9 @@ You will be given pre-computed language detection, tone classification, and
 ambiguity analysis results. Use these as input — do NOT recompute them.
 Refine and synthesize them into a clear intent statement.
 
+If an EXECUTION PLAN is provided, verify the plan's goal aligns with the
+extracted intent. Flag plan-intent misalignment.
+
 Output ONLY a JSON object:
 {
   "intent": "The user's underlying intent expressed as a clear English sentence. Be specific.",
@@ -459,6 +479,7 @@ Key principles:
 - "tone": Use the pre-computed classification as your primary signal.
 - "language": Use the pre-computed detection.
 - "has_ambiguity": Use the pre-computed ambiguity check. Be generous — safer to flag.
+- If a plan is provided and it doesn't match the intent, set has_ambiguity=true.
 - Account for STT transcription errors in the transcript.
 - The transcript comes from speech-to-text. Expect minor errors and account for them."""
 
@@ -470,13 +491,16 @@ async def run_conversation(
     dynamic_schema: Optional[str],
     task_context_data: Optional[str],
     processed_context: Optional[dict],
+    execution_plan = None,  # Optional[ExecutionPlan] — from Planner Node (runs first)
 ) -> tuple[ConversationOutput, ConversationReasoning]:
     """Extract intent, tone, and language using real tool-based analysis.
 
-    Now tool-augmented:
+    NOW PLAN-AWARE: when execution_plan is provided, verifies plan-intent alignment.
+
+    Tool-augmented:
     1. Detects language via character-level + word-level heuristics
     2. Classifies tone via regex pattern matching
-    3. Detects ambiguity via reference/pronoun patterns
+    3. Detects ambiguity via reference/pronoun patterns + plan-intent mismatch
     4. Corrects common STT errors
     5. Builds a structured analysis template for the LLM
     """
@@ -492,6 +516,19 @@ async def run_conversation(
     # ── Tool 4: STT error correction ──
     stt_corrected, stt_fixes = correct_stt_errors(transcript, language=lang_info["language"])
 
+    # Plan-intent misalignment detection
+    if execution_plan and execution_plan.steps:
+        plan_actions = [s.action for s in execution_plan.steps]
+        write_actions = {"update_note", "add_stack_row", "bulk_update_stack", "update_cell",
+                         "delete_row", "manage_tasks", "create_task", "create_calendar_event"}
+        plan_has_writes = any(a in write_actions for a in plan_actions)
+        tone_is_query = tone_info.get("tone") == "query"
+        if tone_is_query and plan_has_writes:
+            ambiguity_list.append(
+                f"Plan-intent mismatch: tone=query but plan includes write actions"
+            )
+            has_ambiguity = True
+
     # ── Assemble reasoning trace ──
     reasoning = ConversationReasoning(
         lang_detection=lang_info,
@@ -501,7 +538,7 @@ async def run_conversation(
         intent_rationale="",
     )
 
-    # ── Tool 5: Build structured conversation analysis template ──
+    # ── Tool 5: Build structured conversation analysis template (WITH PLAN) ──
     analysis_template = build_conversation_template(
         transcript=transcript,
         lang_info=lang_info,
@@ -510,6 +547,7 @@ async def run_conversation(
         ambiguity_list=ambiguity_list,
         stt_corrected=stt_corrected,
         stt_fixes=stt_fixes,
+        execution_plan=execution_plan,
     )
 
     # ── Call LLM with pre-computed analysis as input ──
@@ -519,7 +557,8 @@ async def run_conversation(
         raw = await _call_expert("Conversation", CONVERSATION_SYSTEM, user_msg)
         data = clean_json_output(raw)
         intent = data.get("intent", transcript)
-        reasoning.intent_rationale = f"Derived from: lang={lang_info['language']}, tone={tone_info['tone']}, ambiguity={has_ambiguity}"
+        plan_info = f", plan_steps={len(execution_plan.steps)}" if execution_plan else ""
+        reasoning.intent_rationale = f"Derived from: lang={lang_info['language']}, tone={tone_info['tone']}, ambiguity={has_ambiguity}{plan_info}"
         return ConversationOutput(
             intent=intent,
             tone=data.get("tone", tone_info["tone"]),
@@ -548,8 +587,12 @@ async def run_all_experts(
     dynamic_schema: Optional[str] = None,
     task_context_data: Optional[str] = None,
     processed_context: Optional[dict] = None,
+    execution_plan = None,  # Optional[ExecutionPlan] — from Planner (runs first)
 ) -> DeliberationResult:
     """Fan out to all three experts in parallel via asyncio.gather.
+
+    NOW PLAN-AWARE: experts receive the execution plan from the Planner
+    (which runs sequentially first) and critique/enrich each step.
 
     Each expert now returns (Output, Reasoning) tuple.
     Each expert fails independently — if one fails, the others still contribute.
@@ -557,15 +600,15 @@ async def run_all_experts(
     """
     contrarian_task = run_contrarian(
         transcript, context_type, note_state, dynamic_schema,
-        task_context_data, processed_context,
+        task_context_data, processed_context, execution_plan,
     )
     research_task = run_research(
         transcript, context_type, note_state, dynamic_schema,
-        task_context_data, processed_context,
+        task_context_data, processed_context, execution_plan,
     )
     conversation_task = run_conversation(
         transcript, context_type, note_state, dynamic_schema,
-        task_context_data, processed_context,
+        task_context_data, processed_context, execution_plan,
     )
 
     raw_results = await asyncio.gather(

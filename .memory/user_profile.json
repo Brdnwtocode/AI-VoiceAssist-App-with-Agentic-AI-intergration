@@ -1,18 +1,18 @@
 {
-  "user_id": "e2e6bb31-ec67-425a-a437-a84020dcc54d",
+  "user_id": "44a756bd-9833-49ed-930b-3f11e4d23cc7",
   "preferred_language": "vi",
   "frequently_used_actions": {
-    "none": 1
+    "none": 2
   },
   "frequently_used_contexts": {
-    "NOTE": 1
+    "NOTE": 2
   },
   "common_workflows": [],
   "tone_preference": "command",
-  "total_interactions": 1,
+  "total_interactions": 2,
   "known_facts": {
     "user_name": "halen"
   },
-  "created_at": "2026-06-08T07:09:25.576612+00:00",
-  "updated_at": "2026-06-08T07:09:32.203160+00:00"
+  "created_at": "2026-06-09 09:07:19.681291+00:00",
+  "updated_at": "2026-06-12T15:22:48.191558+00:00"
 }

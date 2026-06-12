@@ -354,6 +354,168 @@ def validate_calendar_context() -> dict:
     return {}
 
 
+def _safe_markdown_insert_position(content: str, cursor_position: int) -> Tuple[int, str, bool]:
+    """Check if a cursor position falls inside markdown syntax and nudge it to safety.
+
+    Returns:
+        (safe_position, corrected_action_type, was_adjusted)
+
+    Detects common cases where inserting at the AI-suggested position would
+    break markdown formatting (headings, lists, bold, italic, code, links, etc.)
+    and nudges the cursor to the nearest safe boundary.
+
+    If the adjustment would be too drastic (>50 chars), falls back to "append".
+    """
+    import re as _re
+
+    if not content:
+        return 0, "insert_at_cursor", False
+
+    pos = max(0, min(cursor_position, len(content)))
+
+    # Find the line containing the cursor
+    line_start = content.rfind("\n", 0, pos) + 1  # 0 if no newline before
+    line_end = content.find("\n", pos)
+    if line_end == -1:
+        line_end = len(content)
+
+    line = content[line_start:line_end]
+    col = pos - line_start  # position within the line
+
+    # ── 1. Line-start syntax markers ──────────────────────────────────────
+    # These are patterns at the very start of a line. If the cursor is inside
+    # the marker prefix, nudge it to just after the prefix.
+
+    line_start_patterns = [
+        # (regex, description, safe_offset)
+        (_re.compile(r"^(#{1,6})\s"), "heading", None),       # ##, ###, etc.
+        (_re.compile(r"^([-*+])\s"), "list bullet", None),    # - item, * item
+        (_re.compile(r"^(\d+\.)\s"), "numbered list", None),  # 1. item
+        (_re.compile(r"^(>\s?)+"), "blockquote", None),       # > quote
+    ]
+
+    for pattern, desc, _ in line_start_patterns:
+        m = pattern.match(line)
+        if m:
+            marker_end = m.end()  # position after the marker within the line
+            if 0 <= col < marker_end:
+                # Cursor is inside the syntax marker — nudge past it
+                safe_col = marker_end
+                safe_pos = line_start + safe_col
+                logger.warning(
+                    "[MarkdownSafety] Cursor at %d inside %s marker '%s' — "
+                    "nudging to %d",
+                    pos, desc, m.group().strip(), safe_pos,
+                )
+                return safe_pos, "insert_at_cursor", True
+
+            # Also check: if cursor is right at position 0 of a heading line,
+            # insert after the heading text ends (end of line) to avoid breaking
+            # the heading. But only if the heading line has actual content.
+            if desc == "heading" and col == 0:
+                # Insert at start of heading line → nudge past the heading text
+                if len(line) > marker_end:
+                    safe_pos = line_start + len(line)
+                    logger.warning(
+                        "[MarkdownSafety] Cursor at start of heading line — "
+                        "appending to end of line (%d)", safe_pos,
+                    )
+                    return safe_pos, "insert_at_cursor", True
+
+            break  # Only one line-start pattern can match
+
+    # ── 2. Inline formatting markers ──────────────────────────────────────
+    # Scan the current line for inline markdown syntax and check if the
+    # cursor falls inside a pair of delimiters.
+
+    inline_patterns = [
+        # (regex, opening_len, closing_len, description)
+        # Bold **...**
+        (_re.compile(r"\*\*"), 2, 2, "bold (**)"),
+        # Bold alt __...__
+        (_re.compile(r"__"), 2, 2, "bold (__)"),
+        # Strikethrough ~~...~~
+        (_re.compile(r"~~"), 2, 2, "strikethrough"),
+        # Inline code `...`
+        (_re.compile(r"`"), 1, 1, "inline code"),
+        # Italic *...* (must not be **)
+        # We handle this via a combined scan below
+    ]
+
+    # Scan for paired delimiters on this line
+    # Build spans of all inline formatting regions
+    spans: List[Tuple[int, int, str]] = []  # (start, end, description)
+
+    # Bold **...**
+    for m in _re.finditer(r"\*\*(.+?)\*\*", line):
+        spans.append((m.start(), m.end(), "bold (**)"))
+
+    # Bold alt __...__
+    for m in _re.finditer(r"__(.+?)__", line):
+        spans.append((m.start(), m.end(), "bold (__)"))
+
+    # Strikethrough ~~...~~
+    for m in _re.finditer(r"~~(.+?)~~", line):
+        spans.append((m.start(), m.end(), "strikethrough"))
+
+    # Inline code `...`
+    for m in _re.finditer(r"`(.+?)`", line):
+        spans.append((m.start(), m.end(), "inline code"))
+
+    # Italic *...* — must not be ** (already caught above)
+    for m in _re.finditer(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", line):
+        spans.append((m.start(), m.end(), "italic (*)"))
+
+    # Italic alt _..._ — must not be __
+    for m in _re.finditer(r"(?<!_)_(?!_)(.+?)(?<!_)_(?!_)", line):
+        spans.append((m.start(), m.end(), "italic (_)"))
+
+    # Links [...](...)
+    for m in _re.finditer(r"\[(.+?)\]\((.+?)\)", line):
+        spans.append((m.start(), m.end(), "link"))
+
+    # Sort spans by start position
+    spans.sort()
+
+    # Check if cursor column falls inside any formatting span
+    for start, end, desc in spans:
+        if start <= col < end:
+            # Cursor is inside a formatting span
+            # Nudge to just after the span (safer than before)
+            safe_col = end
+            safe_pos = line_start + safe_col
+            adjustment = abs(safe_pos - pos)
+
+            if adjustment > 50:
+                # Too drastic — fall back to append
+                logger.warning(
+                    "[MarkdownSafety] Cursor at %d inside %s span [%d:%d] — "
+                    "adjustment too large (%d chars), falling back to append",
+                    pos, desc, line_start + start, line_start + end, adjustment,
+                )
+                return len(content), "append", True
+
+            logger.warning(
+                "[MarkdownSafety] Cursor at %d inside %s span [%d:%d] — "
+                "nudging to %d",
+                pos, desc, line_start + start, line_start + end, safe_pos,
+            )
+            return safe_pos, "insert_at_cursor", True
+
+    # ── 3. Edge case: cursor at position 0 on a line that is a heading/list ──
+    # If the cursor is at column 0 and the line starts with markdown syntax,
+    # but not caught above (e.g., empty heading line), append to end of prev line.
+    if col == 0 and line_start > 0:
+        prev_line_end = line_start - 1  # position of the \n before this line
+        # Check if previous character is a newline
+        if prev_line_end >= 0 and content[prev_line_end] == "\n":
+            # Cursor is at the very start of a line — this is generally safe
+            # but if the line is a heading/list, we already handled it above
+            pass
+
+    return pos, "insert_at_cursor", False
+
+
 def build_note_payload(
     nlu_result: dict,
     note_data: dict,
@@ -383,6 +545,24 @@ def build_note_payload(
     content_to_insert = params["content_to_insert"]
     action_type = params["action_type"]
     current_content = note_data.get("content", "")
+
+    # ── Markdown Formatting Safety Check ──────────────────────────────────
+    # Before computing the diff, validate that the proposed cursor position
+    # won't break markdown syntax (headings, lists, bold, code, etc.).
+    # If it would, nudge to a safe position or fall back to append.
+    if action_type == "insert_at_cursor" and current_content:
+        safe_pos, safe_action, was_adjusted = _safe_markdown_insert_position(
+            current_content, cursor_position,
+        )
+        if was_adjusted:
+            cursor_position = safe_pos
+            action_type = safe_action
+            logger.info(
+                "[MarkdownSafety] Adjusted: pos=%d action=%s",
+                cursor_position, action_type,
+            )
+            # Update params so the response reflects the corrected action_type
+            params["action_type"] = safe_action
 
     def _clean_preview(text: str) -> str:
         """Sanitize markdown/HTML for a clean single-line preview snippet."""

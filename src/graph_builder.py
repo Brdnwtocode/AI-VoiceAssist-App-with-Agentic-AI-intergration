@@ -12,12 +12,14 @@ Graph topology:
   complexity_router ──(simple)──► resolver
       │ (complex)                    │
       ▼                              ▼
-  ┌─── Send(contrarian) ──┐     reflection ◄──┐
-  ├─── Send(research)   ──┤        │            │
-  ├─── Send(conversation)─┤        ├(pass)──► END
-  └─── Send(planner)    ──┘        │(refine)
-      │    │    │    │             ▼
-      └────┼────┼────┘         resolver (retry, max 3)
+    planner ◄── runs FIRST ──   reflection ◄──┐
+      │ (sequential)                 │            │
+      ▼                              ├(pass)──► END
+  ┌─── Send(contrarian) ──┐         │(refine)
+  ├─── Send(research)   ──┤         ▼
+  └─── Send(conversation)─┘     resolver (retry, max 3)
+      │    │    │
+      └────┼────┘
            ▼
        synthesizer
            │
@@ -27,7 +29,9 @@ Graph topology:
 Key LangGraph features:
 - StateGraph with AgentState TypedDict
 - Conditional edges for routing & reflection loop
-- Send API for parallel execution (4 experts + planner)
+- Planner runs SEQUENTIALLY BEFORE experts (plan-first architecture)
+- Send API for parallel expert execution (contrarian, research, conversation)
+- Experts receive the execution plan and critique/enrich it
 - Node-level error handling
 - Messages[] audit trail
 """
@@ -68,35 +72,44 @@ def route_after_safety(state: AgentState) -> Literal["complexity_router", END]:
     return "complexity_router"
 
 
-def route_after_router(state: AgentState) -> List[Send] | Literal["resolver"]:
-    """After complexity router: fan-out to experts+planner (complex) or go to resolver (simple).
+def route_after_router(state: AgentState) -> Literal["planner", "resolver"]:
+    """After complexity router: complex → planner (sequential, runs FIRST), simple → resolver.
 
-    Uses LangGraph Send API for parallel fan-out:
-    - Returns list[Send] when complex → parallel expert + planner execution
-    - Returns "resolver" string when simple → skip experts
+    KEY DESIGN: The planner must RUN FIRST (sequentially) so it can decompose the
+    command into steps BEFORE the experts (contrarian, research, conversation) run.
+    Experts then receive the execution plan and critique/enrich each step.
     """
     if state.get("should_deliberate", False):
-        targets = state.get("fan_out_targets", ["contrarian", "research", "conversation"])
-        logger.info("[Graph] Complex → fanning out to %d experts + planner", len(targets))
-
-        sends: List[Send] = []
-        for target in targets:
-            if target == "contrarian":
-                sends.append(Send("contrarian_expert", state))
-            elif target == "research":
-                sends.append(Send("research_expert", state))
-            elif target == "conversation":
-                sends.append(Send("conversation_expert", state))
-            elif target == "planner":
-                sends.append(Send("planner", state))
-
-        # Always include planner when deliberating
-        sends.append(Send("planner", state))
-
-        return sends
+        logger.info("[Graph] Complex → routing to planner (sequential, BEFORE experts)")
+        return "planner"
 
     logger.info("[Graph] Simple → skipping experts, direct to resolver")
     return "resolver"
+
+
+def route_after_planner(state: AgentState) -> List[Send]:
+    """After planner: fan-out to experts (contrarian, research, conversation).
+
+    Experts run in PARALLEL, each receiving the execution plan so they can:
+    - Contrarian: critique plan steps for risks/alternatives
+    - Research: ground each step against workspace state, identify data gaps
+    - Conversation: verify plan aligns with user intent, flag ambiguities
+
+    Planner has already run sequentially, so execution_plan is populated.
+    """
+    targets = state.get("fan_out_targets") or ["contrarian", "research", "conversation"]
+    logger.info("[Graph] Planner complete → fanning out to %d experts (plan-aware)", len(targets))
+
+    node_map = {
+        "contrarian": "contrarian_expert",
+        "research": "research_expert",
+        "conversation": "conversation_expert",
+    }
+    sends: List[Send] = [
+        Send(node_map[target], state) for target in targets if target in node_map
+    ]
+
+    return sends
 
 
 def route_after_reflection(state: AgentState) -> Literal["resolver", END]:
@@ -166,20 +179,26 @@ def build_orchestrator_graph() -> StateGraph:
         },
     )
 
-    # Complexity router → conditional: simple (resolver) or complex (Send fan-out)
+    # Complexity router → conditional: complex (planner first) or simple (resolver)
     builder.add_conditional_edges(
         "complexity_router",
         route_after_router,
         {
+            "planner": "planner",
             "resolver": "resolver",
         },
     )
 
-    # Expert + Planner nodes → synthesizer (fan-in after parallel execution)
+    # Planner → conditional: fan-out to experts via Send API (experts receive plan)
+    builder.add_conditional_edges(
+        "planner",
+        route_after_planner,
+    )
+
+    # Expert nodes → synthesizer (fan-in after parallel plan-aware execution)
     builder.add_edge("contrarian_expert", "synthesizer")
     builder.add_edge("research_expert", "synthesizer")
     builder.add_edge("conversation_expert", "synthesizer")
-    builder.add_edge("planner", "synthesizer")
 
     # Synthesizer → resolver
     builder.add_edge("synthesizer", "resolver")

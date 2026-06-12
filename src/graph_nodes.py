@@ -61,15 +61,17 @@ from .tools import (
     build_contrarian_template,
     build_conversation_template,
     build_research_template,
+    build_search_query,
     classify_tone,
     correct_stt_errors,
     detect_ambiguity,
     detect_language,
     detect_sycophancy_risks,
+    extract_action_verbs,
     extract_workspace_facts,
     format_workspace_for_llm,
     generate_edge_cases,
-    web_search_formatted,
+    web_search_with_meta,
 )
 
 import litellm
@@ -212,7 +214,7 @@ async def complexity_router_node(state: AgentState) -> Dict[str, Any]:
 
     # ── Heuristic fast path (no LLM call) ──
 
-    # @Maximus trigger → always complex (the ONLY guaranteed complex trigger)
+    # @Maximus trigger → always complex (guaranteed complex trigger)
     if "@maximus" in t_lower:
         assessment = ComplexityAssessment(
             complexity="complex",
@@ -221,7 +223,37 @@ async def complexity_router_node(state: AgentState) -> Dict[str, Any]:
         logger.info("[Router] @Maximus detected → COMPLEX")
         return _build_routing_result(state, assessment)
 
-    # Very short commands → simple (fast path, no further checks needed)
+    # Genuinely complex triggers — checked BEFORE the simple fast paths so that
+    # "research X and add it to the note" / "tìm hiểu về Y" never short-circuit
+    # to simple just because they're short or start with an imperative verb.
+    complex_triggers = [
+        "tại sao", "có nên", "nên không", "phân tích", "so sánh",
+        "should i", "why ", "what if", "analyze", "compare",
+        # Research/external-knowledge intent → needs the research expert + web search
+        "research", "nghiên cứu", "tìm hiểu", "tra cứu", "look up", "find out",
+        "tìm kiếm thông tin", "search for information", "search about",
+        "what is", "who is", "giải thích", "explain",
+    ]
+    if any(p in t_lower for p in complex_triggers):
+        assessment = ComplexityAssessment(
+            complexity="complex",
+            reasoning="Contains reasoning/analysis/research trigger word",
+        )
+        logger.info("[Router] Complex trigger detected → COMPLEX")
+        return _build_routing_result(state, assessment)
+
+    # Multi-step commands need the planner → complex
+    from .tools import detect_multi_step
+    is_multi, _triggers, est_steps = detect_multi_step(transcript)
+    if is_multi and est_steps >= 2:
+        assessment = ComplexityAssessment(
+            complexity="complex",
+            reasoning=f"Multi-step command detected (~{est_steps} steps) — planner needed",
+        )
+        logger.info("[Router] Multi-step detected → COMPLEX")
+        return _build_routing_result(state, assessment)
+
+    # Very short commands → simple (fast path)
     if len(words) <= 5:
         assessment = ComplexityAssessment(
             complexity="simple",
@@ -244,19 +276,6 @@ async def complexity_router_node(state: AgentState) -> Dict[str, Any]:
             reasoning="Direct imperative with clear action verb",
         )
         logger.info("[Router] Imperative start → SIMPLE")
-        return _build_routing_result(state, assessment)
-
-    # Genuinely complex triggers (reasoning/analysis that needs deliberation)
-    complex_triggers = [
-        "tại sao", "có nên", "nên không", "phân tích", "so sánh",
-        "should i", "why ", "what if", "analyze", "compare",
-    ]
-    if any(p in t_lower for p in complex_triggers):
-        assessment = ComplexityAssessment(
-            complexity="complex",
-            reasoning="Contains reasoning/analysis trigger word",
-        )
-        logger.info("[Router] Complex trigger detected → COMPLEX")
         return _build_routing_result(state, assessment)
 
     # Very long transcript without any context → complex (likely research/exploration)
@@ -302,31 +321,45 @@ def _build_routing_result(state: AgentState, assessment: ComplexityAssessment) -
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Phase 3: Expert Nodes (invoked in parallel via Send API)
+# Phase 3: Expert Nodes (invoked in parallel via Send API AFTER planner)
+#
+# DESIGN: Planner runs sequentially FIRST (decomposes command into steps).
+# Then experts (contrarian, research, conversation) run in PARALLEL via
+# Send API, each receiving the execution_plan so they can:
+#   - Contrarian: critique each step for risks/sycophancy
+#   - Research: ground each step against workspace state
+#   - Conversation: verify plan matches user intent
 # ═══════════════════════════════════════════════════════════════════════════
 
-CONTRARIAN_SYSTEM = """You are the CONTRARIAN expert. Challenge the most obvious interpretation.
+CONTRARIAN_SYSTEM = """You are the CONTRARIAN expert. Challenge assumptions and critique the execution plan.
+
+You receive a PRE-GENERATED EXECUTION PLAN from the Planner Node.
+Your job: critique EACH step for risks, edge cases, and sycophancy traps.
 
 Output ONLY JSON:
-{"critique": "What could go wrong?", "risk": "low|medium|high", "alternative_action": "different action or null"}
+{"critique": "Per-step critique: what could go wrong? Flag risky steps by number.", "risk": "low|medium|high", "alternative_action": "different action or null"}
 
 Rules:
-- Flag data loss, wrong targets, ambiguous references, missing prerequisites.
+- Critique the PLAN, not just the raw transcript. Reference step numbers.
+- Flag data loss, wrong targets, ambiguous references, missing prerequisites per step.
 - "risk": "high" for irreversible changes (delete, overwrite, bulk mutate).
+- If the plan looks solid, say so — don't fabricate concerns.
 - Be concise. Output feeds a synthesis prompt, not the user."""
 
 
 async def contrarian_expert_node(state: AgentState) -> Dict[str, Any]:
     """Contrarian expert: challenge assumptions, flag risks, break sycophancy.
 
-    Runs tools first (workspace extraction, edge cases, sycophancy detection),
-    then calls LLM with structured reasoning template.
+    NOW PLAN-AWARE: receives the execution_plan from the Planner Node
+    (which runs sequentially BEFORE experts) and critiques each step.
     """
     transcript = state["transcript"]
     context_type = state["context_type"]
+    plan = state.get("execution_plan")  # ← From planner (runs first)
     req_id = state.get("pipeline_request_id", "")
     t0 = time.perf_counter()
-    logger.info("[Contrarian] Starting analysis")
+    logger.info("[Contrarian] Starting plan-aware analysis (plan has %d steps)",
+                len(plan.steps) if plan else 0)
 
     try:
         # Tool 1: Extract workspace facts
@@ -337,21 +370,39 @@ async def contrarian_expert_node(state: AgentState) -> Dict[str, Any]:
             task_context_data=state.get("task_context_data"),
         )
 
-        # Tool 2: Generate edge cases
-        edge_cases = generate_edge_cases(context_type, transcript)
+        # Tool 2: Generate edge cases (for each plan step if multi-step)
+        edge_cases: List[str] = []
+        if plan and plan.is_multi_step:
+            for s in plan.steps:
+                step_cases = generate_edge_cases(context_type, s.description)
+                edge_cases.extend([f"Step {s.step}: {ec}" for ec in step_cases[:3]])
+        else:
+            edge_cases = generate_edge_cases(context_type, transcript)
 
         # Tool 3: Detect sycophancy risks
         sycophancy_risks = detect_sycophancy_risks(transcript, context_type, workspace_facts)
 
-        # Tool 4: Build structured reasoning template
-        reasoning_template = build_contrarian_template(transcript, context_type, workspace_facts)
+        # Tool 4: Infer the likely action and assess risk profile
+        from .tools import resolve_action_for_context
+        verbs = extract_action_verbs(transcript)
+        likely_action = resolve_action_for_context(
+            verbs[0]["action_type"], context_type
+        ) if verbs else "none"
+        risk_profile = assess_action_risk(likely_action)
+
+        # Tool 5: Build structured reasoning template (NOW WITH PLAN)
+        reasoning_template = build_contrarian_template(
+            transcript, context_type, workspace_facts,
+            likely_action=likely_action,
+            execution_plan=plan,  # ← NEW: plan-aware template
+        )
 
         # Reasoning trace
         reasoning = ContrarianReasoning(
-            deconstructed_command=f"context={context_type}, len={len(transcript)}",
+            deconstructed_command=f"context={context_type}, len={len(transcript)}, likely_action={likely_action}, plan_steps={len(plan.steps) if plan else 0}",
             edge_cases_considered=edge_cases[:8],
             sycophancy_risks=sycophancy_risks,
-            risk_assessment=json.dumps(assess_action_risk("unknown")),
+            risk_assessment=json.dumps({"likely_action": likely_action, **risk_profile}),
         )
 
         # LLM call
@@ -369,11 +420,11 @@ async def contrarian_expert_node(state: AgentState) -> Dict[str, Any]:
         logger.info("[Contrarian] Risk=%s critique_len=%d (%.0fms)", output.risk, len(output.critique), elapsed)
         if req_id:
             store.add_pipeline_stage(req_id, "contrarian_expert", "passed",
-                {"risk": output.risk, "critique": output.critique[:200]}, elapsed)
+                {"risk": output.risk, "critique": output.critique[:200], "plan_aware": plan is not None}, elapsed)
         return {
             "contrarian_output": output,
             "contrarian_reasoning": reasoning,
-            "messages": [{"node": "contrarian", "risk": output.risk}],
+            "messages": [{"node": "contrarian", "risk": output.risk, "plan_aware": plan is not None}],
         }
 
     except Exception as exc:
@@ -389,25 +440,62 @@ async def contrarian_expert_node(state: AgentState) -> Dict[str, Any]:
         }
 
 
-RESEARCH_SYSTEM = """You are the RESEARCH expert. Ground the command against workspace state.
+RESEARCH_SYSTEM = """You are the RESEARCH expert. Ground the command against workspace state and external knowledge.
+
+You receive a PRE-GENERATED EXECUTION PLAN from the Planner Node.
+Your job: verify each step has the data it needs to succeed.
 
 Output ONLY JSON:
-{"relevant_context": "Specific facts from workspace (cite actual values)", "confidence": 0.0-1.0, "data_gaps": ["list missing data"]}
+{"relevant_context": "Specific facts from workspace (cite actual values, reference step numbers)", "confidence": 0.0-1.0, "data_gaps": ["list missing data per step, e.g. 'Step 2 needs: ...'"], "research_findings": "synthesized web content (or empty string)"}
 
 Rules:
 - CITE actual values from workspace — not generic descriptions.
-- If web results provided, incorporate relevant facts.
-- 0.9-1.0: all data present. 0.5-0.8: gaps exist. 0.0-0.4: critical data missing.
-- data_gaps: list SPECIFIC missing pieces."""
+- Reference PLAN STEP NUMBERS when identifying gaps: "Step 3 (add_stack_row) needs column schema — not provided"
+- If web search results are provided, research_findings MUST synthesize them into 3-6
+  sentences of polished, factual prose (with key facts, dates, numbers). This text will
+  be inserted into the user's workspace verbatim — write it for the end user.
+- research_findings must be grounded ONLY in the provided web results. Never invent facts.
+- 0.9-1.0: all data present for all steps. 0.5-0.8: gaps exist in some steps. 0.0-0.4: critical data missing.
+- data_gaps: list SPECIFIC missing pieces, tagged with the step number they affect."""
+
+
+# Research-intent keywords that warrant a web search (VI + EN)
+_RESEARCH_KEYWORDS = [
+    "tại sao", "phân tích", "so sánh", "giải thích", "what is", "why ",
+    "how to", "explain", "analyze", "compare", "research", "tra cứu",
+    "tìm hiểu", "định nghĩa", "khái niệm", "nghiên cứu", "tìm kiếm thông tin",
+    "look up", "find out", "search for", "search about", "who is", "when did",
+    "latest", "news about", "thông tin về", "mới nhất",
+]
+
+
+def _should_web_search(transcript: str, context_type: str, workspace_facts: dict) -> bool:
+    """Decide whether the research expert should hit the web.
+
+    Triggers on research-intent keywords OR contextless exploratory queries.
+    The keyword list intentionally errs toward searching: a wasted search
+    costs ~1s; a missing search breaks 'research X and add to note' flows.
+    """
+    t_lower = transcript.lower()
+    if any(kw in t_lower for kw in _RESEARCH_KEYWORDS):
+        return True
+    has_no_context = context_type == "none" or not workspace_facts.get("item_count")
+    return has_no_context and len(transcript.split()) > 5
 
 
 async def research_expert_node(state: AgentState) -> Dict[str, Any]:
-    """Research expert: ground command against workspace state + optional web search."""
+    """Research expert: ground command against workspace state + optional web search.
+
+    NOW PLAN-AWARE: receives the execution_plan from the Planner Node
+    (which runs sequentially BEFORE experts) and verifies each step has data.
+    """
     transcript = state["transcript"]
     context_type = state["context_type"]
+    plan = state.get("execution_plan")  # ← From planner (runs first)
     req_id = state.get("pipeline_request_id", "")
     t0 = time.perf_counter()
-    logger.info("[Research] Starting analysis")
+    logger.info("[Research] Starting plan-aware analysis (plan has %d steps)",
+                len(plan.steps) if plan else 0)
 
     try:
         # Tool 1: Extract workspace facts
@@ -423,24 +511,21 @@ async def research_expert_node(state: AgentState) -> Dict[str, Any]:
         web_performed = False
         web_query = None
         web_count = 0
+        web_sources: List[str] = []
 
-        t_lower = transcript.lower()
-        research_kw = [
-            "tại sao", "phân tích", "so sánh", "giải thích", "what is", "why ",
-            "how to", "explain", "analyze", "compare", "research", "tra cứu",
-            "tìm hiểu", "định nghĩa", "khái niệm",
-        ]
-        has_no_context = context_type == "none" or not workspace_facts.get("item_count")
-
-        if any(kw in t_lower for kw in research_kw) or (has_no_context and len(transcript.split()) > 5):
-            web_query = transcript[:200]
-            web_results = await web_search_formatted(web_query, max_results=3)
+        if _should_web_search(transcript, context_type, workspace_facts):
+            # Distill the transcript into a clean topical query
+            # (strips @Maximus, "add it to the note", politeness, etc.)
+            web_query = build_search_query(transcript)
+            web_results, web_count, web_sources = await web_search_with_meta(web_query, max_results=5)
             web_performed = True
-            web_count = 3 if "[Web search returned no results]" not in web_results else 0
-            logger.info("[Research] Web search: %d results", web_count)
+            logger.info("[Research] Web search query=%r → %d results", web_query, web_count)
 
-        # Tool 3: Build grounding template
-        reasoning_template = build_research_template(transcript, context_type, workspace_facts, web_results)
+        # Tool 3: Build grounding template (NOW WITH PLAN)
+        reasoning_template = build_research_template(
+            transcript, context_type, workspace_facts, web_results,
+            execution_plan=plan,  # ← NEW: plan-aware template
+        )
 
         # Reasoning trace
         reasoning = ResearchReasoning(
@@ -462,23 +547,38 @@ async def research_expert_node(state: AgentState) -> Dict[str, Any]:
         reasoning.confidence_rationale = (
             f"Confidence={conf:.0%}: "
             + ("web search available" if web_performed else "workspace-only")
+            + f", plan_steps={len(plan.steps) if plan else 0}"
         )
+
+        findings = (data.get("research_findings") or "").strip()
+        # Guard: if web results existed but the LLM skipped synthesis,
+        # fall back to the raw formatted results so content still flows downstream.
+        if web_count > 0 and not findings:
+            findings = web_results[:1500]
 
         output = ResearchOutput(
             relevant_context=data.get("relevant_context", ""),
             confidence=conf,
             data_gaps=data.get("data_gaps", []),
+            research_findings=findings,
+            sources=web_sources,
         )
 
         elapsed = (time.perf_counter() - t0) * 1000
-        logger.info("[Research] Confidence=%.0% gaps=%d (%.0fms)", conf, len(output.data_gaps), elapsed)
+        logger.info(
+            "[Research] Confidence=%.2f gaps=%d findings_len=%d (%.0fms)",
+            conf, len(output.data_gaps), len(findings), elapsed,
+        )
         if req_id:
             store.add_pipeline_stage(req_id, "research_expert", "passed",
-                {"confidence": conf, "data_gaps": output.data_gaps[:5], "web_search": web_performed}, elapsed)
+                {"confidence": conf, "data_gaps": output.data_gaps[:5],
+                 "web_search": web_performed, "web_results": web_count,
+                 "findings_len": len(findings)}, elapsed)
         return {
             "research_output": output,
             "research_reasoning": reasoning,
-            "messages": [{"node": "research", "confidence": conf, "web_search": web_performed}],
+            "messages": [{"node": "research", "confidence": conf,
+                          "web_search": web_performed, "web_results": web_count}],
         }
 
     except Exception as exc:
@@ -500,22 +600,33 @@ async def research_expert_node(state: AgentState) -> Dict[str, Any]:
 
 CONVERSATION_SYSTEM = """You are the CONVERSATION expert. Extract intent, tone, language patterns.
 
+You receive a PRE-GENERATED EXECUTION PLAN from the Planner Node.
+Your job: verify the plan aligns with the user's true intent and flag mismatches.
+
 Output ONLY JSON:
 {"intent": "Clear specific intent in English", "tone": "command|query|chitchat", "language": "vi|en|mixed", "has_ambiguity": true|false}
 
 Rules:
 - intent must be SPECIFIC: not 'manage tasks' but 'create task X due Y'
+- Compare the plan's overall_goal against your extracted intent. Flag misalignment.
+- If the plan seems to do something the user didn't ask for, set has_ambiguity=true.
 - Use pre-computed language/tone/ambiguity as input — refine, don't recompute.
 - Account for STT errors in the transcript.
 - Be generous with has_ambiguity."""
 
 
 async def conversation_expert_node(state: AgentState) -> Dict[str, Any]:
-    """Conversation expert: language detection, tone, ambiguity, STT correction."""
+    """Conversation expert: language detection, tone, ambiguity, STT correction.
+
+    NOW PLAN-AWARE: receives the execution_plan from the Planner Node
+    (which runs sequentially BEFORE experts) and verifies plan-intent alignment.
+    """
     transcript = state["transcript"]
+    plan = state.get("execution_plan")  # ← From planner (runs first)
     req_id = state.get("pipeline_request_id", "")
     t0 = time.perf_counter()
-    logger.info("[Conversation] Starting analysis")
+    logger.info("[Conversation] Starting plan-aware analysis (plan has %d steps)",
+                len(plan.steps) if plan else 0)
 
     try:
         # Tool 1: Language detection
@@ -526,6 +637,19 @@ async def conversation_expert_node(state: AgentState) -> Dict[str, Any]:
 
         # Tool 3: Ambiguity detection
         has_ambiguity, ambiguity_list, ambiguity_score = detect_ambiguity(transcript)
+
+        # Plan-intent misalignment: if plan exists but tone is query and plan has write actions
+        if plan and plan.steps:
+            plan_actions = [s.action for s in plan.steps]
+            write_actions = {"update_note", "add_stack_row", "bulk_update_stack", "update_cell",
+                             "delete_row", "manage_tasks", "create_task", "create_calendar_event"}
+            plan_has_writes = any(a in write_actions for a in plan_actions)
+            tone_is_query = tone_info.get("tone") == "query"
+            if tone_is_query and plan_has_writes:
+                ambiguity_list.append(
+                    f"Plan-intent mismatch: tone=query but plan includes write actions {[a for a in plan_actions if a in write_actions]}"
+                )
+                has_ambiguity = True
 
         # Tool 4: STT error correction
         stt_corrected, stt_fixes = correct_stt_errors(transcript, language=lang_info["language"])
@@ -538,7 +662,7 @@ async def conversation_expert_node(state: AgentState) -> Dict[str, Any]:
             ambiguities_detected=ambiguity_list,
         )
 
-        # Tool 5: Build analysis template
+        # Tool 5: Build analysis template (NOW WITH PLAN)
         analysis_template = build_conversation_template(
             transcript=transcript,
             lang_info=lang_info,
@@ -547,6 +671,7 @@ async def conversation_expert_node(state: AgentState) -> Dict[str, Any]:
             ambiguity_list=ambiguity_list,
             stt_corrected=stt_corrected,
             stt_fixes=stt_fixes,
+            execution_plan=plan,  # ← NEW: plan-aware template
         )
 
         # LLM call
@@ -556,6 +681,7 @@ async def conversation_expert_node(state: AgentState) -> Dict[str, Any]:
         intent = data.get("intent", transcript)
         reasoning.intent_rationale = (
             f"lang={lang_info['language']}, tone={tone_info['tone']}, ambiguity={has_ambiguity}"
+            + (f", plan_steps={len(plan.steps)}" if plan else "")
         )
 
         output = ConversationOutput(
@@ -573,11 +699,13 @@ async def conversation_expert_node(state: AgentState) -> Dict[str, Any]:
         if req_id:
             store.add_pipeline_stage(req_id, "conversation_expert", "passed",
                 {"language": output.language, "tone": output.tone,
-                 "intent": output.intent[:200], "has_ambiguity": output.has_ambiguity}, elapsed)
+                 "intent": output.intent[:200], "has_ambiguity": output.has_ambiguity,
+                 "plan_aware": plan is not None}, elapsed)
         return {
             "conversation_output": output,
             "conversation_reasoning": reasoning,
-            "messages": [{"node": "conversation", "language": output.language, "tone": output.tone}],
+            "messages": [{"node": "conversation", "language": output.language, "tone": output.tone,
+                          "plan_aware": plan is not None}],
         }
 
     except Exception as exc:
@@ -600,9 +728,11 @@ async def conversation_expert_node(state: AgentState) -> Dict[str, Any]:
 # ═══════════════════════════════════════════════════════════════════════════
 
 async def synthesizer_node(state: AgentState) -> Dict[str, Any]:
-    """Combine expert outputs + execution plan into a structured directive for the Resolver.
+    """Combine plan-aware expert outputs + execution plan into a structured directive for the Resolver.
 
-    This is the fan-in point after parallel expert + planner execution.
+    This is the fan-in point after parallel plan-aware expert execution.
+    The planner ran FIRST (sequential), experts received the plan and
+    critique/enriched it in parallel. Now we assemble everything for the Resolver.
     """
     req_id = state.get("pipeline_request_id", "")
     t0 = time.perf_counter()
@@ -621,12 +751,14 @@ async def synthesizer_node(state: AgentState) -> Dict[str, Any]:
         if contrarian.alternative_action:
             synthesis_parts.append(f"Alternative: {contrarian.alternative_action}")
 
-    if research and (research.confidence < 0.8 or research.data_gaps):
+    if research and (research.confidence < 0.8 or research.data_gaps or research.research_findings):
         synthesis_parts.append(
             f"[RESEARCH] Confidence={research.confidence:.0%}. {research.relevant_context}"
         )
         if research.data_gaps:
             synthesis_parts.append(f"Data gaps: {', '.join(research.data_gaps)}")
+        if research.research_findings:
+            synthesis_parts.append("Research findings available — see RESEARCH FINDINGS block in directive.")
 
     if conversation and (conversation.has_ambiguity or conversation.language == "mixed"):
         synthesis_parts.append(
@@ -708,6 +840,17 @@ def _build_directive(transcript: str, context_type: str, deliberation: Deliberat
         parts.append(f"RESEARCH: Confidence={r.confidence:.0%}. {r.relevant_context}")
         if r.data_gaps:
             parts.append(f"  Data gaps: {', '.join(r.data_gaps)}")
+        if r.research_findings:
+            parts.append("")
+            parts.append("─── RESEARCH FINDINGS (web-sourced content) ───")
+            parts.append(r.research_findings)
+            if r.sources:
+                parts.append("Sources: " + "; ".join(r.sources[:5]))
+            parts.append(
+                "If the user asked to save/insert/add researched information into the "
+                "workspace (note, task, stack...), USE the RESEARCH FINDINGS text above "
+                "as the content for that action. Do not reply that you cannot search the web."
+            )
         parts.append("")
 
     conv = deliberation.conversation
@@ -754,6 +897,11 @@ Rules:
 - For data-changing actions, set reply to null.
 - For none with chit-chat, set params to {} and put text in reply.
 - Never invent IDs; only use provided fields.
+- RESEARCH FINDINGS Rule: If an expert deliberation block below contains "RESEARCH FINDINGS"
+  and the user asked to save/add/insert researched information into the workspace,
+  you MUST execute the write action (e.g. update_note with the findings text as
+  content_to_insert). Never reply that you cannot search the web — the research
+  has already been performed for you.
 - Context Guidance Rule: If the user asks to edit/delete/find something NOT in the provided Context, set action to "none" and reply: "Please select the tabs or use @mentions in the text to add the relevant material to my context."
 
 ─── MEMORY & CONTINUITY ───
@@ -951,9 +1099,26 @@ IMPORTANT: Address ALL issues listed above. Do NOT repeat the same mistakes.
     else:
         allowed_types = {context_type}
 
-    # Action validation (same as original run_resolver)
-    action_validated = _validate_action(action, params, reply, allowed_types, processed_context,
-                                        dynamic_schema)
+    # Action validation (same as original run_resolver).
+    # Validation failures must NOT crash the graph — they become a refinable
+    # state so the reflection loop can ask the resolver to fix its output.
+    try:
+        action_validated = _validate_action(action, params, reply, allowed_types, processed_context,
+                                            dynamic_schema)
+    except (HTTPException, Exception) as val_exc:
+        detail = getattr(val_exc, "detail", None) or str(val_exc)
+        logger.warning("[Resolver] Output validation failed: %s (action=%s)", detail, action)
+        elapsed = (time.perf_counter() - t0) * 1000
+        if req_id:
+            store.add_pipeline_stage(req_id, "resolver", "failed",
+                {"error": f"validation: {detail}"[:200], "action": action}, elapsed)
+        return {
+            "nlu_result": {"action": "none", "params": {}, "reply": None},
+            "nlu_raw_response": raw[:500],
+            "refinement_count": refinement_count + 1,
+            "error": f"Resolver output validation failed: {detail}",
+            "messages": [{"node": "resolver", "validation_error": str(detail)[:200], "action": action}],
+        }
 
     logger.info("[Resolver] Action=%s reply=%s", action_validated["action"], action_validated.get("reply"))
 
@@ -1075,7 +1240,13 @@ Rules:
 - Steps must be ordered logically — step N depends only on steps < N.
 - params_hint should be HINTS, not exact values. The Resolver fills exact params.
 - For single-step commands, set is_multi_step=false, one step, fallback_action=the action.
-- Actions: update_note, add_stack_row, bulk_update_stack, update_cell, delete_row, manage_tasks, create_task, summarize_context, create_calendar_event, none.
+- Actions: update_note, add_stack_row, bulk_update_stack, update_cell, delete_row, manage_tasks, create_task, summarize_context, create_calendar_event, research, none.
+- "research" steps mean: gather information (web/workspace). The Research expert performs
+  these automatically — the FINAL workspace action should consume the research findings.
+  e.g. "research X and add it to the note" → step 1: research X; step 2: update_note
+  (depends_on [1], params_hint: {"content_source": "research_findings"}).
+- Pick actions matching the active context: NOTE→update_note, STACK→add_stack_row/update_cell,
+  TASK→manage_tasks, CALENDAR→create_calendar_event.
 - Think about dependencies: "Create task then add it to calendar" → step 2 depends_on [1].
 """
 
@@ -1092,6 +1263,7 @@ async def planner_node(state: AgentState) -> Dict[str, Any]:
         detect_multi_step,
         extract_action_verbs,
         extract_workspace_facts,
+        resolve_action_for_context,
     )
 
     transcript = state["transcript"]
@@ -1115,7 +1287,12 @@ async def planner_node(state: AgentState) -> Dict[str, Any]:
         # If clearly single-step, skip LLM call and return simple plan
         if not is_multi and est_steps <= 1:
             verbs = extract_action_verbs(transcript)
-            fallback = verbs[0]["action_type"] if verbs else "none"
+            # Map the verb-derived action to the active context
+            # (e.g. "thêm"/"add" → update_note when in NOTE context, not add_stack_row)
+            raw_action = verbs[0]["action_type"] if verbs else "none"
+            fallback = resolve_action_for_context(raw_action, context_type)
+            if fallback == "research":  # research alone isn't an executable action
+                fallback = "none"
             logger.info("[Planner] Single-step detected — skipping LLM, fallback=%s", fallback)
             from .models import ExecutionPlan, PlanStep
             plan = ExecutionPlan(
@@ -1256,6 +1433,28 @@ async def reflection_node(state: AgentState) -> Dict[str, Any]:
 
     # ── Pre-compute hallucination check ──
     has_hallu, hallu_issues = detect_hallucination(nlu_result, context_type)
+
+    # ── Pre-compute "research was requested but discarded" check ──
+    # If the research expert produced findings AND the user asked to save them
+    # into the workspace, the resolver must NOT return action=none.
+    research = state.get("research_output")
+    action_now = nlu_result.get("action", "")
+    t_low = transcript.lower()
+    wants_write = any(kw in t_low for kw in (
+        "add", "insert", "write", "save", "append", "put",
+        "thêm", "ghi", "viết", "lưu", "chèn",
+    ))
+    if (
+        research and research.research_findings
+        and wants_write and action_now == "none"
+    ):
+        hallu_issues.append(
+            "Research findings are available and the user asked to save them, "
+            "but the resolver returned action=none. Use the RESEARCH FINDINGS "
+            "text as content for the appropriate write action "
+            "(update_note for NOTE context, etc.)."
+        )
+        has_hallu = True
 
     # ── Quick heuristic: if it's iteration 3, accept regardless ──
     if iteration >= max_iter - 1:

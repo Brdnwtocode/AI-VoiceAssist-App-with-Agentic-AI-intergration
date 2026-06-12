@@ -89,6 +89,7 @@ class ResolverLLMOutput(BaseModel):
         "add_stack_row",
         "bulk_update_stack",
         "manage_tasks",
+        "create_task",
         "summarize_context",
         "create_calendar_event",
         "update_cell",
@@ -132,6 +133,8 @@ class ResearchOutput(BaseModel):
     relevant_context: str = Field(default="", description="Key facts from workspace state relevant to this command")
     confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Confidence that workspace state has been fully considered")
     data_gaps: List[str] = Field(default_factory=list, description="Information gaps that prevent confident resolution")
+    research_findings: str = Field(default="", description="Synthesized research content (from web search) that downstream actions can use verbatim")
+    sources: List[str] = Field(default_factory=list, description="Source URLs backing the research findings")
 
 
 class ConversationOutput(BaseModel):

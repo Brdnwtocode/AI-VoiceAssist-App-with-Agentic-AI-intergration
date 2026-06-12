@@ -10,6 +10,8 @@ from typing import Any, Callable, Coroutine, Dict, List, Tuple, Union
 from .tools import (
     web_search,
     web_search_formatted,
+    web_search_with_meta,
+    build_search_query,
     extract_workspace_facts,
     detect_language,
     correct_stt_errors,
@@ -27,6 +29,7 @@ from .tools import (
     build_planning_template,
     detect_hallucination,
     build_reflection_template,
+    resolve_action_for_context,
 )
 
 
@@ -300,6 +303,110 @@ def test_template_builders() -> None:
     assert "REFLECTION CRITIQUE FRAMEWORK" in ref_temp
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# New tests for audit fixes (Jun 2026)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_build_search_query() -> None:
+    """build_search_query must strip @Maximus, action clauses, and politeness."""
+    print("Testing build_search_query...")
+    # Strips @Maximus trigger
+    q1 = build_search_query("@Maximus, research about the rise of AI and add it to the note")
+    assert "@maximus" not in q1.lower(), f"@Maximus not stripped: {q1}"
+    # Strips trailing action clause
+    assert "add it to the note" not in q1.lower(), f"action clause not stripped: {q1}"
+    # Keeps the topic
+    assert "rise of ai" in q1.lower() or "ai" in q1.lower(), f"topic lost: {q1}"
+    # Pure research query passes through
+    q2 = build_search_query("research about quantum computing")
+    assert "quantum" in q2.lower(), f"topic lost: {q2}"
+    # Empty after stripping → falls back to de-mentioned transcript
+    q3 = build_search_query("@Maximus, please add it to the note")
+    assert len(q3) >= 3, f"fallback too short: {q3}"
+    print("PASS  build_search_query")
+
+
+def test_resolve_action_for_context() -> None:
+    """resolve_action_for_context must map verbs to the correct action for the context."""
+    print("Testing resolve_action_for_context...")
+    # "thêm" in NOTE context → update_note (not add_stack_row)
+    assert resolve_action_for_context("add_stack_row", "NOTE") == "update_note"
+    # "thêm" in STACK context → add_stack_row (correct)
+    assert resolve_action_for_context("add_stack_row", "STACK") == "add_stack_row"
+    # "thêm" in TASK context → manage_tasks
+    assert resolve_action_for_context("add_stack_row", "TASK") == "manage_tasks"
+    # "create" in CALENDAR context → create_calendar_event
+    assert resolve_action_for_context("create_task", "CALENDAR") == "create_calendar_event"
+    # "research" verb → stays research (handled by planner)
+    assert resolve_action_for_context("research", "NOTE") == "research"
+    # Unknown action → passthrough
+    assert resolve_action_for_context("none", "NOTE") == "none"
+    print("PASS  resolve_action_for_context")
+
+
+def test_assess_action_risk_known_action() -> None:
+    """assess_action_risk must return the real profile, not a generic one."""
+    print("Testing assess_action_risk with known action...")
+    profile = assess_action_risk("delete_row")
+    assert profile["base_risk"] == "high", f"delete_row should be high risk, got {profile['base_risk']}"
+    profile2 = assess_action_risk("add_stack_row")
+    assert profile2["base_risk"] == "low"
+    # "research" action added in audit
+    profile3 = assess_action_risk("research")
+    assert profile3["base_risk"] == "low"
+    print("PASS  assess_action_risk_known_action")
+
+
+async def test_web_search_with_meta() -> None:
+    """web_search_with_meta returns (text, count, urls) with correct count."""
+    print("Testing web_search_with_meta...")
+    text, count, urls = await web_search_with_meta("python programming", max_results=3)
+    assert isinstance(text, str), f"Expected str, got {type(text)}"
+    assert isinstance(count, int), f"Expected int, got {type(count)}"
+    assert isinstance(urls, list), f"Expected list, got {type(urls)}"
+    if count > 0:
+        assert "Web search results" in text or "[Web search returned no results]" in text
+        assert count == len(urls), f"count {count} != urls length {len(urls)}"
+    print(f"PASS  web_search_with_meta (count={count})")
+
+
+def test_research_output_model() -> None:
+    """ResearchOutput model must accept research_findings and sources fields."""
+    print("Testing ResearchOutput model fields...")
+    from .models import ResearchOutput
+    out = ResearchOutput(
+        relevant_context="test",
+        confidence=0.9,
+        research_findings="AI has transformed...",
+        sources=["https://example.com"],
+    )
+    assert out.research_findings == "AI has transformed..."
+    assert out.sources == ["https://example.com"]
+    # Backward-compatible: fields default to empty
+    out2 = ResearchOutput(relevant_context="test", confidence=0.5)
+    assert out2.research_findings == ""
+    assert out2.sources == []
+    print("PASS  research_output_model")
+
+
+def test_resolver_llm_output_create_task() -> None:
+    """ResolverLLMOutput must accept 'create_task' without Pydantic error."""
+    print("Testing ResolverLLMOutput with create_task...")
+    from .models import ResolverLLMOutput
+    # This was the bug: 'create_task' was missing from the Literal
+    out = ResolverLLMOutput(action="create_task", params={"title": "Test"})
+    assert out.action == "create_task"
+    # All other actions still work
+    for action in [
+        "update_note", "add_stack_row", "bulk_update_stack", "manage_tasks",
+        "create_task", "summarize_context", "create_calendar_event",
+        "update_cell", "delete_row", "none",
+    ]:
+        o = ResolverLLMOutput(action=action, params={})
+        assert o.action == action
+    print("PASS  resolver_llm_output_create_task")
+
+
 async def run_all_tests() -> int:
     print("=" * 60)
     print("STARTING AI PIPELINE TOOLS BLACKBOX TEST SUITE")
@@ -318,6 +425,12 @@ async def run_all_tests() -> int:
         ("extract_action_verbs", test_extract_action_verbs),
         ("detect_hallucination", test_detect_hallucination),
         ("template_builders", test_template_builders),
+        # New tests for audit fixes (Jun 2026)
+        ("build_search_query", test_build_search_query),
+        ("resolve_action_for_context", test_resolve_action_for_context),
+        ("assess_action_risk_known_action", test_assess_action_risk_known_action),
+        ("research_output_model", test_research_output_model),
+        ("resolver_llm_output_create_task", test_resolver_llm_output_create_task),
     ]
     
     passed = 0
@@ -334,6 +447,17 @@ async def run_all_tests() -> int:
     except Exception as exc:
         print(f"FAIL  web_search: {type(exc).__name__}: {exc}")
         failed.append("web_search")
+
+    try:
+        await test_web_search_with_meta()
+        print("PASS  web_search_with_meta")
+        passed += 1
+    except AssertionError as exc:
+        print(f"FAIL  web_search_with_meta: {exc}")
+        failed.append("web_search_with_meta")
+    except Exception as exc:
+        print(f"FAIL  web_search_with_meta: {type(exc).__name__}: {exc}")
+        failed.append("web_search_with_meta")
 
     # Run sync tests
     for name, fn in tests_sync:

@@ -23,20 +23,75 @@ from .config import logger
 # Web Search Tool (Research Expert)
 # ═══════════════════════════════════════════════════════════════════════════
 
+# Patterns stripped from transcripts when building a search query:
+# trigger mentions, action clauses ("and add it to the note"), politeness.
+_QUERY_NOISE_PATTERNS = [
+    r"@\w+[,:]?\s*",                                            # @Maximus mention
+    r"\b(and|then|và|rồi|sau đó)\s+(add|insert|put|write|save|append|ghi|thêm|viết|lưu|chèn)\b.*$",  # trailing action clause
+    r"\b(add|insert|put|write|save|append)\s+(it|this|that|the results?|them)\s+(in|into|to|on)\b.*$",
+    r"\b(ghi|thêm|viết|lưu|chèn)\s+(nó|cái này|kết quả)?\s*(vào|lên)\b.*$",
+    r"^\s*(please|hãy|làm ơn|giúp tôi|giúp mình|can you|could you)\s+",
+    r"^\s*(research|search|look up|find out|tìm hiểu|tra cứu|tìm kiếm|nghiên cứu)\s+(about|on|for|về|thông tin về)?\s*",
+]
+
+
+def build_search_query(transcript: str, max_len: int = 120) -> str:
+    """Distill a raw voice transcript into a clean web-search query.
+
+    Removes trigger mentions (@Maximus), trailing action clauses
+    ("...and add it to the note"), politeness prefixes, and research verbs,
+    leaving just the topic. Falls back to the cleaned transcript if the
+    result would be empty.
+    """
+    q = transcript.strip()
+    for pattern in _QUERY_NOISE_PATTERNS:
+        q = re.sub(pattern, " ", q, flags=re.IGNORECASE).strip()
+    q = re.sub(r"\s{2,}", " ", q).strip(" ,.;:!?")
+    if len(q) < 3:  # stripped too much — use de-mentioned transcript
+        q = re.sub(r"@\w+[,:]?\s*", "", transcript).strip()
+    return q[:max_len]
+
+
 async def web_search(
     query: str,
     max_results: int = 5,
     region: str = "wt-wt",
 ) -> List[Dict[str, str]]:
-    """Search the web via DuckDuckGo Instant Answer + HTML fallback.
+    """Search the web. Primary: `ddgs` library (robust DuckDuckGo client).
+    Fallbacks: DuckDuckGo HTML scrape → DuckDuckGo Lite → Wikipedia REST API.
 
     Returns a list of dicts: {"title": ..., "snippet": ..., "url": ...}
-
     No API key required. Falls back gracefully on network errors.
     """
     results: List[Dict[str, str]] = []
+    if not query or not query.strip():
+        return results
 
-    # ── Primary: DuckDuckGo Instant Answer API (no auth) ──
+    # ── Primary: ddgs library (maintained DuckDuckGo client) ──
+    try:
+        from ddgs import DDGS
+
+        def _ddgs_search() -> List[Dict[str, str]]:
+            out = []
+            with DDGS() as ddgs:
+                for r in ddgs.text(query, region=region, max_results=max_results):
+                    out.append({
+                        "title": r.get("title", ""),
+                        "snippet": r.get("body", ""),
+                        "url": r.get("href", ""),
+                    })
+            return out
+
+        results = await asyncio.to_thread(_ddgs_search)
+        if results:
+            logger.info("Web search (ddgs) returned %d results for: %s", len(results), query[:80])
+            return results
+    except ImportError:
+        logger.debug("ddgs library not installed — falling back to HTML scrape")
+    except Exception as exc:
+        logger.warning("ddgs search failed: %s — falling back", exc)
+
+    # ── Fallback 1: DuckDuckGo HTML scrape ──
     try:
         import httpx
 
@@ -123,26 +178,59 @@ async def web_search(
     except Exception as exc:
         logger.warning("DuckDuckGo Lite fallback failed: %s", exc)
 
+    # ── Fallback 3: Wikipedia REST search (very reliable, topical queries) ──
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.get(
+                "https://en.wikipedia.org/w/rest.php/v1/search/page",
+                params={"q": query, "limit": max_results},
+                headers={"User-Agent": "VoiceAssistResearch/1.0"},
+            )
+            if resp.status_code == 200:
+                for page in resp.json().get("pages", []):
+                    desc = page.get("description") or ""
+                    excerpt = re.sub(r"<[^>]+>", "", page.get("excerpt") or "")
+                    results.append({
+                        "title": page.get("title", ""),
+                        "snippet": (desc + " — " + excerpt).strip(" —"),
+                        "url": f"https://en.wikipedia.org/wiki/{quote_plus(page.get('key', ''))}",
+                    })
+                if results:
+                    logger.info("Web search (wikipedia) returned %d results for: %s", len(results), query[:80])
+                    return results
+    except Exception as exc:
+        logger.warning("Wikipedia fallback failed: %s", exc)
+
     # ── Last resort: return empty ──
     logger.warning("Web search returned 0 results for: %s", query[:80])
     return results
 
 
-async def web_search_formatted(query: str, max_results: int = 5) -> str:
-    """Search the web and return a formatted string for LLM consumption."""
+async def web_search_with_meta(query: str, max_results: int = 5) -> Tuple[str, int, List[str]]:
+    """Search the web; return (formatted_text, result_count, source_urls)."""
     results = await web_search(query, max_results)
     if not results:
-        return "[Web search returned no results]"
+        return "[Web search returned no results]", 0, []
 
     lines = [f"Web search results for: \"{query}\"", ""]
+    urls: List[str] = []
     for i, r in enumerate(results, 1):
         lines.append(f"{i}. {r['title']}")
         if r["snippet"]:
             lines.append(f"   {r['snippet'][:300]}")
         if r["url"]:
             lines.append(f"   URL: {r['url']}")
+            urls.append(r["url"])
         lines.append("")
-    return "\n".join(lines)
+    return "\n".join(lines), len(results), urls
+
+
+async def web_search_formatted(query: str, max_results: int = 5) -> str:
+    """Search the web and return a formatted string for LLM consumption."""
+    text, _, _ = await web_search_with_meta(query, max_results)
+    return text
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -599,6 +687,11 @@ _RISK_MATRIX: Dict[str, Dict[str, Any]] = {
         "concern": "Summary may omit critical information",
         "mitigations": ["Review summary completeness"],
     },
+    "research": {
+        "base_risk": "low",
+        "concern": "Web-sourced content may be inaccurate or outdated",
+        "mitigations": ["Cite sources", "Ground findings only in retrieved results"],
+    },
     "none": {
         "base_risk": "low",
         "concern": "User intent not actioned — may need follow-up",
@@ -763,19 +856,40 @@ def build_contrarian_template(
     transcript: str,
     context_type: str,
     workspace_facts: Dict[str, Any],
+    likely_action: str = "unknown",
+    execution_plan: Any = None,  # Optional[ExecutionPlan]
 ) -> str:
     """Build a structured critical reasoning template for the Contrarian.
 
-    This is the core tool that replaces a simple system prompt with a
-    step-by-step critical analysis framework.
+    NOW PLAN-AWARE: when execution_plan is provided, the framework includes
+    the plan steps and asks the contrarian to critique EACH step.
     """
-    risk_profile = assess_action_risk("unknown")  # Will be refined by LLM
+    risk_profile = assess_action_risk(likely_action)
     edge_cases = generate_edge_cases(context_type, transcript)
     sycophancy_risks = detect_sycophancy_risks(transcript, context_type, workspace_facts)
     data_gaps = workspace_facts.get("missing_critical", [])
     entities = workspace_facts.get("key_entities", [])
 
+    # ── Build plan context section ──
+    plan_context = ""
+    if execution_plan and execution_plan.steps:
+        plan_lines = ["─── EXECUTION PLAN (from Planner Node) ───",
+                      f"Overall goal: {execution_plan.overall_goal}",
+                      f"Reasoning: {execution_plan.reasoning}",
+                      f"Multi-step: {execution_plan.is_multi_step}",
+                      "Steps:"]
+        for s in execution_plan.steps:
+            deps = f" (depends on step(s) {s.depends_on})" if s.depends_on else ""
+            plan_lines.append(
+                f"  Step {s.step}: [{s.action}] {s.description}{deps}"
+                + (f" — params_hint: {json.dumps(s.params_hint, ensure_ascii=False)}" if s.params_hint else "")
+            )
+        plan_context = "\n".join(plan_lines)
+
     template = f"""=== CONTRARIAN CRITICAL REASONING FRAMEWORK ===
+
+STEP 0 — REVIEW THE EXECUTION PLAN (IF PROVIDED)
+{plan_context if plan_context else '[No plan — single action assessment only]'}
 
 STEP 1 — DECONSTRUCT THE COMMAND
 - Raw transcript: "{transcript}"
@@ -783,8 +897,8 @@ STEP 1 — DECONSTRUCT THE COMMAND
 - Known entities in workspace: {json.dumps(entities[:5], ensure_ascii=False) if entities else 'None'}
 - Data gaps: {json.dumps(data_gaps, ensure_ascii=False) if data_gaps else 'None identified'}
 
-STEP 2 — CHALLENGE THE OBVIOUS INTERPRETATION
-For each edge case below, ask: "Could the user mean this instead?"
+STEP 2 — CHALLENGE THE PLAN (or the obvious interpretation if no plan)
+For each edge case below, ask: "Could the plan fail because of this?"
 
 Edge cases to consider:
 {chr(10).join(f'- {ec}' for ec in edge_cases)}
@@ -796,20 +910,21 @@ fill gaps with assumptions. For THIS command, the specific risks are:
 {chr(10).join(f'- {sr}' for sr in sycophancy_risks)}
 
 STEP 4 — RISK ASSESSMENT
-- If this action is destructive (delete, overwrite, bulk mutate) → HIGH risk
-- If this action is reversible but suboptimal → MEDIUM risk
-- If this action is straightforward and safe → LOW risk
+- If any plan step is destructive (delete, overwrite, bulk mutate) → HIGH risk
+- If a plan step is reversible but suboptimal → MEDIUM risk
+- If all steps are straightforward and safe → LOW risk
 
+Likely action: {likely_action}
 Action risk profile: {json.dumps(risk_profile, ensure_ascii=False)}
 
 STEP 5 — OUTPUT
 Based on the analysis above, produce a JSON output with:
-- critique: What could go wrong with the most obvious interpretation?
+- critique: Per-step critique — reference step numbers. What could go wrong?
 - risk: "low" | "medium" | "high"
 - alternative_action: A specific different action, or null if none is plausible
 
 Remember: Your job is NOT to block the user. It's to make the assistant THINK
-before acting. Flag real risks; don't manufacture false concerns.
+before acting. Critique the PLAN, not just the raw utterance.
 """
     return template
 
@@ -912,15 +1027,31 @@ def build_research_template(
     context_type: str,
     workspace_facts: Dict[str, Any],
     web_results: str = "",
+    execution_plan: Any = None,  # Optional[ExecutionPlan]
 ) -> str:
     """Build a structured research analysis template.
 
-    Unlike the Contrarian's critical template, this focuses on grounding —
-    connecting the user's command to actual data.
+    NOW PLAN-AWARE: when execution_plan is provided, the framework asks the
+    research expert to ground EACH step against available data.
     """
     workspace_summary = format_workspace_for_llm(workspace_facts)
 
+    # ── Build plan context section ──
+    plan_context = ""
+    if execution_plan and execution_plan.steps:
+        plan_lines = ["─── EXECUTION PLAN (from Planner Node) ───",
+                      f"Overall goal: {execution_plan.overall_goal}"]
+        for s in execution_plan.steps:
+            plan_lines.append(
+                f"  Step {s.step}: [{s.action}] {s.description}"
+                + f" — needs context: {s.context_required or 'any'}"
+            )
+        plan_context = "\n".join(plan_lines)
+
     template = f"""=== RESEARCH GROUNDING FRAMEWORK ===
+
+STEP 0 — REVIEW THE EXECUTION PLAN (IF PROVIDED)
+{plan_context if plan_context else '[No plan — ground the raw command directly]'}
 
 STEP 1 — IDENTIFY WHAT THE USER IS ASKING
 Transcript: "{transcript}"
@@ -929,30 +1060,34 @@ Context type: {context_type}
 STEP 2 — INVENTORY WORKSPACE STATE
 {workspace_summary}
 
-STEP 3 — MAP USER REQUEST TO AVAILABLE DATA
-For each entity/action the user mentions, check:
+STEP 3 — MAP EACH PLAN STEP TO AVAILABLE DATA
+For each step in the plan (or the raw command if no plan):
 - Is this entity present in the workspace? → YES: cite it / NO: flag as data gap
 - Is the action valid for this context type? → YES: confirm / NO: flag as mismatch
 - Are all required parameters available? → YES: note them / NO: list what's missing
+- TAG each gap with the step number: "Step 2 needs: column schema"
 
 STEP 4 — EXTERNAL KNOWLEDGE (if applicable)
 {web_results if web_results else '[No web search performed — command is workspace-scoped]'}
 
 STEP 5 — CONFIDENCE CALIBRATION
-- 0.9-1.0: All user-referenced data found in workspace, action is clear
-- 0.5-0.8: Some data found, but gaps or ambiguities exist
+- 0.9-1.0: All data present for all plan steps
+- 0.5-0.8: Gaps exist in some steps
 - 0.0-0.4: Critical data missing, cannot ground the command
 
 STEP 6 — OUTPUT JSON
 {{
-  "relevant_context": "Specific facts from workspace state (with actual values)",
+  "relevant_context": "Specific facts from workspace state (with actual values, reference step numbers)",
   "confidence": <0.0 to 1.0>,
-  "data_gaps": ["list specific missing data points"]
+  "data_gaps": ["list specific missing data points per step, e.g. 'Step 2 (add_stack_row): column schema not provided'"],
+  "research_findings": "If web results are present above: synthesize them into 3-6 sentences of usable, factual content (cite key facts/dates/numbers). This text will be inserted into the user's workspace verbatim, so write it as polished prose. Empty string if no web results."
 }}
 
 IMPORTANT: If you found data in workspace state, CITE IT SPECIFICALLY.
+Reference PLAN STEP NUMBERS when identifying gaps.
 Do not say 'the note contains information' — say what the information IS.
 If a data_gap exists, say exactly what's missing, not 'some data is missing'.
+If web results exist, research_findings MUST be non-empty and grounded ONLY in those results.
 """
     return template
 
@@ -969,9 +1104,26 @@ def build_conversation_template(
     ambiguity_list: List[str],
     stt_corrected: str,
     stt_fixes: List[str],
+    execution_plan: Any = None,  # Optional[ExecutionPlan]
 ) -> str:
-    """Build a structured conversation analysis template."""
+    """Build a structured conversation analysis template.
+
+    NOW PLAN-AWARE: when execution_plan is provided, the framework asks the
+    conversation expert to verify the plan matches the user's intent.
+    """
+    # ── Build plan context section ──
+    plan_context = ""
+    if execution_plan and execution_plan.steps:
+        plan_lines = ["─── EXECUTION PLAN (from Planner Node) ───",
+                      f"Overall goal: {execution_plan.overall_goal}"]
+        for s in execution_plan.steps:
+            plan_lines.append(f"  Step {s.step}: [{s.action}] {s.description}")
+        plan_context = "\n".join(plan_lines)
+
     return f"""=== CONVERSATION ANALYSIS FRAMEWORK ===
+
+STEP 0 — REVIEW THE EXECUTION PLAN (IF PROVIDED)
+{plan_context if plan_context else '[No plan — analyze raw command directly]'}
 
 STEP 1 — RAW INPUT
 Original transcript: "{transcript}"
@@ -988,10 +1140,16 @@ STEP 3 — TONE CLASSIFICATION
 Detected tone: {tone_info.get('tone', 'unknown')} (confidence: {tone_info.get('confidence', 0)})
 Indicators found: {json.dumps(tone_info.get('indicators', []), ensure_ascii=False)}
 
-STEP 4 — AMBIGUITY CHECK
+STEP 4 — AMBIGUITY CHECK (including plan-intent alignment)
 Has ambiguity: {'YES' if has_ambiguity else 'No'}
 Ambiguities detected:
 {chr(10).join(f'- {a}' for a in ambiguity_list) if ambiguity_list else '- None'}
+
+STEP 4b — PLAN-INTENT ALIGNMENT (if plan provided)
+Compare the plan's overall_goal against the transcript:
+- Does the plan capture ALL actions the user requested?
+- Does the plan do anything the user did NOT ask for?
+- Are the step actions appropriate for this context type?
 
 STEP 5 — OUTPUT JSON
 {{
@@ -1003,6 +1161,7 @@ STEP 5 — OUTPUT JSON
 
 IMPORTANT:
 - 'intent' must be specific: not 'manage tasks' but 'create a task titled X due on Y'
+- If a plan is provided and it doesn't match the intent, set has_ambiguity=true
 - If the language is 'mixed', note which parts are which in the intent
 - If STT corrections were applied, use the CORRECTED transcript for intent extraction
 - Be generous with has_ambiguity — it's safer to flag than to assume
@@ -1035,13 +1194,45 @@ _ACTION_TYPE_MAP: Dict[str, str] = {
     "lên lịch": "create_calendar_event", "đặt lịch": "create_calendar_event",
     "tóm tắt": "summarize_context", "tổng hợp": "summarize_context",
     "quản lý": "manage_tasks", "hoàn thành": "manage_tasks",
+    # Research/lookup verbs (count as a step: gather info before acting)
+    "nghiên cứu": "research", "tìm hiểu": "research", "tra cứu": "research",
     # English
     "add": "add_stack_row", "create": "create_task", "write": "update_note",
     "delete": "delete_row", "remove": "delete_row", "update": "update_cell",
     "change": "update_cell", "edit": "update_cell",
     "schedule": "create_calendar_event", "summarize": "summarize_context",
     "complete": "manage_tasks", "finish": "manage_tasks",
+    "research": "research", "look up": "research", "find out": "research",
+    "insert": "update_note", "append": "update_note", "save": "update_note",
 }
+
+# Context-aware override: a generic "add/thêm" verb means different actions
+# depending on the active workspace context.
+_CONTEXT_ACTION_OVERRIDES: Dict[str, Dict[str, str]] = {
+    "NOTE": {"add_stack_row": "update_note", "update_cell": "update_note",
+             "delete_row": "update_note", "create_task": "update_note",
+             "bulk_update_stack": "update_note"},
+    "STACK": {"update_note": "add_stack_row", "create_task": "add_stack_row"},
+    "TASK": {"add_stack_row": "manage_tasks", "update_cell": "manage_tasks",
+             "update_note": "manage_tasks", "delete_row": "manage_tasks",
+             "create_task": "manage_tasks"},
+    "TASKS": {"add_stack_row": "manage_tasks", "update_cell": "manage_tasks",
+              "update_note": "manage_tasks", "delete_row": "manage_tasks",
+              "create_task": "manage_tasks"},
+    "CALENDAR": {"add_stack_row": "create_calendar_event",
+                 "create_task": "create_calendar_event",
+                 "update_note": "create_calendar_event"},
+}
+
+
+def resolve_action_for_context(action_type: str, context_type: str) -> str:
+    """Map a verb-derived action type to the correct action for the active context.
+
+    e.g. "thêm"/"add" maps to add_stack_row by default, but in a NOTE context
+    the right action is update_note; in TASK context it's manage_tasks.
+    """
+    overrides = _CONTEXT_ACTION_OVERRIDES.get(context_type, {})
+    return overrides.get(action_type, action_type)
 
 
 def detect_multi_step(transcript: str) -> Tuple[bool, List[str], int]:
@@ -1094,9 +1285,13 @@ def build_planning_template(
     transcript: str,
     context_type: str,
     workspace_facts: Dict[str, Any],
-    expert_outputs: Dict[str, Any] = None,
 ) -> str:
     """Build a structured planning template for the Planning Node.
+
+    The Planner runs SEQUENTIALLY FIRST — before any expert agents.
+    It decomposes complex commands into ordered executable steps.
+    Experts (contrarian, research, conversation) will later receive
+    this plan and critique/enrich it.
 
     This gives the LLM a structured framework to decompose a complex
     command into an ordered sequence of executable steps.
@@ -1105,21 +1300,6 @@ def build_planning_template(
     action_verbs = extract_action_verbs(transcript)
     entities = workspace_facts.get("key_entities", [])
     data_gaps = workspace_facts.get("missing_critical", [])
-
-    # Build expert context summary
-    expert_context = ""
-    if expert_outputs:
-        parts = []
-        if expert_outputs.get("contrarian"):
-            c = expert_outputs["contrarian"]
-            parts.append(f"Contrarian risk={c.risk}: {c.critique[:200]}")
-        if expert_outputs.get("research"):
-            r = expert_outputs["research"]
-            parts.append(f"Research conf={r.confidence:.0%}: {r.relevant_context[:200]}")
-        if expert_outputs.get("conversation"):
-            v = expert_outputs["conversation"]
-            parts.append(f"Intent: {v.intent}, Tone: {v.tone}")
-        expert_context = "\n".join(parts)
 
     template = f"""=== TASK PLANNING FRAMEWORK ===
 
@@ -1138,10 +1318,7 @@ STEP 3 — AVAILABLE CONTEXT
 Known entities: {json.dumps(entities[:5], ensure_ascii=False) if entities else 'None'}
 Data gaps: {json.dumps(data_gaps, ensure_ascii=False) if data_gaps else 'None'}
 
-STEP 4 — EXPERT INSIGHTS
-{expert_context if expert_context else '[No expert deliberation — planning independently]'}
-
-STEP 5 — BUILD THE PLAN
+STEP 4 — BUILD THE PLAN
 For each step, specify:
 - step: sequential number
 - action: one of [update_note, add_stack_row, bulk_update_stack, update_cell, delete_row, manage_tasks, create_task, summarize_context, create_calendar_event, none]
@@ -1150,7 +1327,7 @@ For each step, specify:
 - depends_on: list of step numbers this step depends on (empty if independent)
 - context_required: what data from the workspace this step needs
 
-STEP 6 — OUTPUT JSON
+STEP 5 — OUTPUT JSON
 {{
   "overall_goal": "The user's goal in one clear sentence",
   "reasoning": "Why this plan structure was chosen",
@@ -1169,11 +1346,13 @@ STEP 6 — OUTPUT JSON
 }}
 
 RULES:
+- You are the FIRST node in the deliberation pipeline. Experts will critique your plan later.
 - If the command is NOT truly multi-step, set is_multi_step=false and use fallback_action for the single action.
 - Steps should be ordered logically — step N can only depend on steps < N.
 - params_hint should be hints, not exact values. The Resolver fills in exact params.
 - For single-step commands, return one step and is_multi_step=false.
 - The plan should be EXECUTABLE — each step must be a valid action with clear inputs.
+- Be decisive. A clear plan with minor imperfections is better than an overly cautious 'none'.
 """
     return template
 

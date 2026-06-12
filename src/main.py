@@ -14,20 +14,6 @@ from fastapi.staticfiles import StaticFiles
 from .config import app
 from .replay import store
 
-# ── Database startup/shutdown ──
-@app.on_event("startup")
-async def startup_db():
-    """Initialize Neon PostgreSQL pool + run schema migration."""
-    from .database import init_db
-    await init_db()
-
-
-@app.on_event("shutdown")
-async def shutdown_db():
-    """Close the Neon PostgreSQL connection pool."""
-    from .database import close_pool
-    await close_pool()
-
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")

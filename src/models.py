@@ -39,6 +39,25 @@ class CreateCalendarEventParams(BaseModel):
     color: str = Field(default="#5645d4", pattern=r"^#[0-9A-Fa-f]{6}$")
 
 
+class CreateNoteParams(BaseModel):
+    """Create a new note from scratch."""
+    title: str = Field(..., description="Note title")
+    content: str = Field(default="", description="Initial note content (markdown)")
+
+
+class CreateStackParams(BaseModel):
+    """Create a new stack from scratch."""
+    title: str = Field(..., description="Stack title")
+    columns: List[Dict[str, str]] = Field(
+        default_factory=list,
+        description="Column definitions: [{'name': 'Col1', 'type': 'TEXT'}, ...]"
+    )
+    initial_rows: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Optional initial row data"
+    )
+
+
 class SummarizeContextParams(BaseModel):
     summary: str = Field(..., description="The summary or synthesis of the context materials.")
 
@@ -94,6 +113,8 @@ class ResolverLLMOutput(BaseModel):
         "create_calendar_event",
         "update_cell",
         "delete_row",
+        "create_note",
+        "create_stack",
         "none",
     ]
     params: Dict[str, Any] = Field(default_factory=dict)

@@ -234,6 +234,188 @@ async def web_search_formatted(query: str, max_results: int = 5) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Page Content Fetcher — extracts actual text from web pages
+# ═══════════════════════════════════════════════════════════════════════════
+
+# HTML tags/scripts to strip before extracting text
+_REMOVE_TAGS = re.compile(
+    r'<(script|style|nav|footer|header|aside|noscript|iframe|svg|form|'
+    r'select|button|textarea|input|meta|link|img|video|audio|source|'
+    r'embed|object|param|track|map|area|canvas|template|slot)'
+    r'[^>]*>.*?</\1>',
+    re.DOTALL | re.IGNORECASE,
+)
+_REMOVE_SELF_CLOSING = re.compile(
+    r'<(br|hr|input|img|meta|link)\s*[^>]*/?>',
+    re.IGNORECASE,
+)
+_STRIP_TAGS = re.compile(r'<[^>]+>')
+_COLLAPSE_WHITESPACE = re.compile(r'\s{2,}')
+_COLLAPSE_NEWLINES = re.compile(r'\n{3,}')
+
+
+def _html_to_text(html: str, max_chars: int = 5000) -> str:
+    """Convert HTML body content to readable plain text.
+
+    Strips scripts, styles, navigation, and common boilerplate.
+    Returns up to max_chars of the most content-dense text.
+    """
+    if not html:
+        return ""
+
+    # Remove non-content elements
+    text = _REMOVE_TAGS.sub(' ', html)
+    text = _REMOVE_SELF_CLOSING.sub(' ', text)
+    text = _STRIP_TAGS.sub(' ', text)
+
+    # Decode common HTML entities
+    text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+    text = text.replace('&quot;', '"').replace('&#39;', "'").replace('&nbsp;', ' ')
+
+    # Collapse whitespace
+    text = _COLLAPSE_WHITESPACE.sub(' ', text)
+    text = _COLLAPSE_NEWLINES.sub('\n\n', text)
+
+    # Split into paragraphs, keep only lines with substantial content
+    lines = [line.strip() for line in text.split('\n')]
+    content_lines = [line for line in lines if len(line) > 40]
+
+    if not content_lines:
+        # Fallback: take all non-empty lines
+        content_lines = [line for line in lines if line]
+
+    result = '\n\n'.join(content_lines)
+    if len(result) > max_chars:
+        # Truncate at a clean paragraph boundary
+        result = result[:max_chars]
+        last_break = max(result.rfind('\n'), result.rfind('. '), result.rfind('? '), result.rfind('! '))
+        if last_break > max_chars // 2:
+            result = result[:last_break + 1]
+    return result
+
+
+async def fetch_page_content(
+    url: str,
+    timeout: float = 10.0,
+    max_chars: int = 5000,
+) -> str:
+    """Fetch and extract readable text content from a web page.
+
+    Args:
+        url: The page URL to fetch.
+        timeout: HTTP request timeout in seconds.
+        max_chars: Maximum characters of extracted content to return.
+
+    Returns:
+        Extracted plain text content, or empty string on failure.
+    """
+    if not url or not url.startswith(('http://', 'https://')):
+        return ""
+
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(
+                url,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/125.0.0.0 Safari/537.36"
+                    ),
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9,vi;q=0.8",
+                },
+                follow_redirects=True,
+            )
+
+            if resp.status_code != 200:
+                logger.info("fetch_page_content: HTTP %d for %s", resp.status_code, url[:80])
+                return ""
+
+            content_type = resp.headers.get("content-type", "")
+            if "text/html" not in content_type and "application/xhtml" not in content_type:
+                logger.info("fetch_page_content: non-HTML content (%s) for %s", content_type, url[:80])
+                return ""
+
+            text = _html_to_text(resp.text, max_chars)
+            logger.info("fetch_page_content: extracted %d chars from %s", len(text), url[:80])
+            return text
+
+    except ImportError:
+        logger.warning("fetch_page_content: httpx not installed")
+        return ""
+    except Exception as exc:
+        logger.warning("fetch_page_content: failed for %s: %s", url[:80], exc)
+        return ""
+
+
+async def web_search_with_content(
+    query: str,
+    max_results: int = 3,
+    fetch_pages: int = 2,
+    max_chars_per_page: int = 4000,
+) -> Tuple[str, int, List[str]]:
+    """Search the web AND fetch actual page content from top results.
+
+    This is the primary research tool. It:
+    1. Searches for relevant pages (same as web_search)
+    2. Fetches the full text content from the top N results
+    3. Formats everything for LLM consumption
+
+    Args:
+        query: Search query string.
+        max_results: Max search results to return.
+        fetch_pages: How many of the top results to fetch full content from.
+        max_chars_per_page: Max chars to extract per fetched page.
+
+    Returns:
+        (formatted_text_with_content, result_count, source_urls)
+    """
+    # Step 1: Search
+    results = await web_search(query, max_results)
+    if not results:
+        return "[Web search returned no results]", 0, []
+
+    urls: List[str] = []
+    lines = [f"Web search results for: \"{query}\"", ""]
+
+    # Step 2: Format snippets from all results
+    for i, r in enumerate(results, 1):
+        lines.append(f"{i}. {r['title']}")
+        if r["snippet"]:
+            lines.append(f"   Snippet: {r['snippet'][:300]}")
+        if r["url"]:
+            lines.append(f"   URL: {r['url']}")
+            urls.append(r["url"])
+        lines.append("")
+
+    # Step 3: Fetch full content from top N pages
+    if fetch_pages > 0:
+        lines.append("─── FULL PAGE CONTENT (fetched from top results) ───")
+        lines.append("")
+
+        fetched = 0
+        for i, r in enumerate(results[:fetch_pages + 1]):
+            if not r.get("url") or not r["url"].startswith(("http://", "https://")):
+                continue
+            if fetched >= fetch_pages:
+                break
+
+            content = await fetch_page_content(r["url"], max_chars=max_chars_per_page)
+            if content:
+                fetched += 1
+                lines.append(f"── Content from: {r['title']} ({r['url'][:80]}) ──")
+                lines.append(content)
+                lines.append("")
+            else:
+                logger.info("web_search_with_content: skipped %s (no content)", r.get("url", "")[:80])
+
+    return "\n".join(lines), len(results), urls
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Workspace Data Extraction (Research Expert)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1321,11 +1503,19 @@ Data gaps: {json.dumps(data_gaps, ensure_ascii=False) if data_gaps else 'None'}
 STEP 4 — BUILD THE PLAN
 For each step, specify:
 - step: sequential number
-- action: one of [update_note, add_stack_row, bulk_update_stack, update_cell, delete_row, manage_tasks, create_task, summarize_context, create_calendar_event, none]
+- action: one of [update_note, add_stack_row, bulk_update_stack, update_cell, delete_row, manage_tasks, create_task, summarize_context, create_calendar_event, create_note, create_stack, research, none]
 - description: what this step accomplishes
 - params_hint: hints for parameter values (not exact params — the Resolver fills those in)
 - depends_on: list of step numbers this step depends on (empty if independent)
 - context_required: what data from the workspace this step needs
+
+NOTE on "research" action: This step means the Research expert will perform web/workspace
+search. The findings will be injected into the resolver's context automatically.
+Use this when the user asks to research/look up/find information.
+e.g. "research AI trends and add to note" → step 1: research "AI trends"; step 2: update_note (depends_on [1]).
+
+NOTE on "create_note" / "create_stack": Use when the user wants to create something NEW
+from scratch (no existing context). Set params_hint with title and optional content/columns.
 
 STEP 5 — OUTPUT JSON
 {{

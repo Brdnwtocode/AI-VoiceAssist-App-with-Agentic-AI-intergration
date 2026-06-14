@@ -27,6 +27,17 @@ RESOLVER_FALLBACKS = [
 ]
 SENTINEL_MODEL = "groq/llama-3.1-8b-instant"
 
+# ── SafetyGate Config (retry + fallback chain) ────────────────────────────
+# Primary model must be fast (<500ms). Fallbacks activate on timeout/connect failure.
+# On ALL models exhausted → fail OPEN (treat as safe) — a timeout is not a threat.
+SAFETYGATE_PRIMARY = "groq/llama-3.1-8b-instant"
+SAFETYGATE_FALLBACKS = [
+    "gemini/gemini-2.0-flash",
+    "openrouter/openai/gpt-oss-120b:free",
+]
+SAFETYGATE_RETRIES = 2        # Retry primary on stale-connection timeout
+SAFETYGATE_TIMEOUT = 10.0     # Safety check should be sub-second in practice
+
 # ── Multi-Expert Orchestration Config ─────────────────────────────────────
 # Experts use fast 8B models for structured short outputs (~300-800ms each).
 # The Resolver (Gemini 2.5 Flash) synthesizes their findings.

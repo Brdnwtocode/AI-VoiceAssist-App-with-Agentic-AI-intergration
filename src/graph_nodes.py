@@ -489,8 +489,13 @@ async def contrarian_expert_node(state: AgentState) -> Dict[str, Any]:
         raw, llm_meta = await _call_llm("Contrarian", CONTRARIAN_SYSTEM, user_msg)
         data = clean_json_output(raw)
 
+        # Flatten dict critique → string (LLM sometimes returns per-step dict)
+        critique_raw = data.get("critique", "")
+        if isinstance(critique_raw, dict):
+            critique_raw = "; ".join(f"{k}: {v}" for k, v in critique_raw.items())
+
         output = ContrarianOutput(
-            critique=data.get("critique", ""),
+            critique=critique_raw,
             risk=data.get("risk", "low"),
             alternative_action=data.get("alternative_action"),
         )
@@ -1009,6 +1014,10 @@ You are a DIFF ENGINE. Never return full document content. Return ONLY the propo
 
 3. WORKSPACE ACTION Rules:
    - NOTE context: update_note (content_to_insert: the EXACT new text to insert, action_type: "append"|"insert_at_cursor") or none.
+     * summarize_context: use when the user asks to summarize, analyze, or synthesize the context materials.
+       params MUST include a "summary" field with your original synthesis of the provided context.
+       Example: {"summary": "The Bugs note lists 6 unfixed bugs. Key issues include..."}
+       NEVER echo back context metadata (context_id, context_type) — always produce original summary text.
    - STACK context: update_cell, add_stack_row, bulk_update_stack, delete_row.
    - TASK context: manage_tasks (action_type create|update|delete, etc.).
    - CALENDAR context: create_calendar_event or none.

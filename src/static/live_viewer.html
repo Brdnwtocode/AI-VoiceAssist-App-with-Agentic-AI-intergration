@@ -518,6 +518,168 @@ body {
     .detail-panel { max-height: 65vh; }
     .pipeline-stages { flex-wrap: wrap; }
 }
+
+/* ── Expert Thought Cards (inline in stage details) ── */
+.expert-thought-card {
+    margin: 8px 16px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #161b22;
+}
+.expert-thought-card .thought-header {
+    padding: 6px 12px;
+    background: #1c2333;
+    font-size: .7rem;
+    font-weight: 600;
+    color: #d2a8ff;
+    display: flex; align-items: center; gap: 6px;
+    border-bottom: 1px solid #21262d;
+}
+.expert-thought-card .thought-body {
+    padding: 8px 12px;
+    font-size: .75rem;
+    color: #c9d1d9;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.expert-thought-card .thought-body.code {
+    font-family: 'Courier New', monospace;
+    font-size: .72rem;
+    color: #a5d6ff;
+}
+
+/* ── Tool usage badges ── */
+.tool-badge {
+    display: inline-block;
+    font-size: .58rem;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-right: 3px;
+    font-weight: 500;
+}
+.tool-badge.used { background: #1b3d1f; color: #7ee787; }
+.tool-badge.skipped { background: #21262d; color: #8b949e; }
+.tool-badge.warning { background: #3d351f; color: #ffa657; }
+.tool-badge.error { background: #3d1f1f; color: #f87171; }
+
+/* ── Interaction arrow between stages ── */
+.interaction-hint {
+    display: flex; align-items: center; gap: 2px;
+    padding: 2px 8px; margin: 2px 0;
+    font-size: .62rem; color: #8b949e;
+}
+.interaction-hint .from { color: #79c0ff; }
+.interaction-hint .to { color: #7ee787; }
+.interaction-hint .data-label { color: #d2a8ff; font-style: italic; }
+
+/* ── Data gap list ── */
+.gap-list { list-style: none; padding: 0; margin: 4px 0; }
+.gap-list li {
+    padding: 3px 8px; margin: 2px 0;
+    background: #3d351f; border-radius: 4px;
+    font-size: .7rem; color: #ffa657;
+    font-family: 'Courier New', monospace;
+}
+
+/* ── Issue list (reflection) ── */
+.issue-list { list-style: none; padding: 0; margin: 4px 0; }
+.issue-list li {
+    padding: 3px 8px; margin: 2px 0;
+    background: #3d1f1f; border-radius: 4px;
+    font-size: .7rem; color: #f87171;
+    font-family: 'Courier New', monospace;
+}
+
+/* ── Suggestion list (reflection) ── */
+.suggestion-list { list-style: none; padding: 0; margin: 4px 0; }
+.suggestion-list li {
+    padding: 3px 8px; margin: 2px 0;
+    background: #1f2d3d; border-radius: 4px;
+    font-size: .7rem; color: #79c0ff;
+}
+
+/* ── Expert Modal Overlay ── */
+.expert-modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+}
+.expert-modal {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    max-width: 700px; width: 90%;
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+}
+.expert-modal .modal-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid #30363d;
+    display: flex; align-items: center; gap: 10px;
+    flex-shrink: 0;
+}
+.expert-modal .modal-header h2 { font-size: 1rem; color: #e1e4e8; flex: 1; }
+.expert-modal .modal-header .modal-close {
+    background: none; border: none; color: #8b949e; font-size: 1.3rem;
+    cursor: pointer; padding: 2px 8px;
+}
+.expert-modal .modal-header .modal-close:hover { color: #f85149; }
+.expert-modal .modal-body {
+    padding: 16px 20px;
+    overflow-y: auto;
+    flex: 1;
+    font-size: .82rem;
+    color: #c9d1d9;
+    line-height: 1.6;
+}
+.expert-modal .modal-body .modal-section {
+    margin-bottom: 16px;
+    border: 1px solid #21262d;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.expert-modal .modal-body .modal-section-title {
+    background: #1c2333;
+    padding: 6px 12px;
+    font-size: .72rem;
+    font-weight: 600;
+    color: #d2a8ff;
+    border-bottom: 1px solid #21262d;
+}
+.expert-modal .modal-body .modal-section-content {
+    padding: 10px 12px;
+    font-size: .78rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.expert-modal .modal-body .modal-section-content.code {
+    font-family: 'Courier New', monospace;
+    font-size: .7rem;
+    color: #a5d6ff;
+}
+
+/* ── Pipeline viz stage clickable ── */
+.pipeline-stage { cursor: pointer; }
+.pipeline-stage:hover .stage-dot { transform: scale(1.15); transition: transform .15s; }
+.pipeline-stage:hover .stage-label { color: #e1e4e8; }
+
+/* ── Refinement loop indicator ── */
+.refine-loop-badge {
+    display: inline-block;
+    font-size: .62rem; padding: 2px 8px; border-radius: 10px;
+    background: #2d1f3d; color: #d2a8ff;
+    margin: 4px 0;
+}
+.refine-loop-badge .loop-arrow { color: #ffa657; margin: 0 3px; }
 </style>
 </head>
 <body>
@@ -553,7 +715,7 @@ body {
         <span class="tab-badge live">live</span>
         <span class="tab-close" onclick="event.stopPropagation();closeTab('default')" title="Close tab">✕</span>
     </div>
-    <div class="tab-add" onclick="addNewTab()" title="New live tab">+ New Tab</div>
+    <div class="tab-add" onclick="addNewTab()" title="New live tab">+</div>
     <div class="tab-import" onclick="document.getElementById('importFileInput').click()" title="Import saved session">📥 Import Session</div>
 </div>
 
@@ -626,7 +788,7 @@ function renderTabBar() {
         }
         html += '</div>';
     });
-    html += '<div class="tab-add" onclick="addNewTab()" title="New live tab">+ New Tab</div>';
+    html += '<div class="tab-add" onclick="addNewTab()" title="New live tab">+</div>';
     html += '<div class="tab-import" onclick="document.getElementById(\'importFileInput\').click()" title="Import saved session">📥 Import Session</div>';
     bar.innerHTML = html;
 }
@@ -1278,7 +1440,7 @@ function renderPipelineViz(trace, mode) {
                 if (cd.input_len) tooltip += ' | in='+cd.input_len+'c';
                 if (cd.model) tooltip += ' | model='+cd.model;
                 if (cd.total_tokens) tooltip += ' | '+cd.total_tokens+' tok';
-                vizHTML += '<div class="pipeline-stage" title="'+esc(tooltip)+'">';
+                vizHTML += '<div class="pipeline-stage" title="'+esc(tooltip)+'" onclick="showExpertModal(\''+child.id+'\')">';
                 vizHTML += '<div class="stage-dot '+cs+'">'+child.icon+'</div>';
                 vizHTML += '<div class="stage-label'+(cs!=='pending'?' active':'')+'">'+esc(child.label)+'</div>';
                 vizHTML += '</div>';
@@ -1306,7 +1468,7 @@ function renderPipelineViz(trace, mode) {
             if (sd.total_tokens) tooltip += ' | '+sd.total_tokens+' tok';
             if (sd.provider) tooltip += ' | via '+sd.provider;
 
-            vizHTML += '<div class="pipeline-stage" title="'+esc(tooltip)+'">';
+            vizHTML += '<div class="pipeline-stage" title="'+esc(tooltip)+'" onclick="showExpertModal(\''+node.id+'\')">';
             vizHTML += '<div class="stage-dot '+ss+'">'+node.icon+'</div>';
             vizHTML += '<div class="stage-label'+(ss!=='pending'?' active':'')+'">'+esc(node.label)+'</div>';
             vizHTML += '</div>';
@@ -1314,75 +1476,162 @@ function renderPipelineViz(trace, mode) {
     }
 
     vizHTML += '</div></div>';
+
     return vizHTML;
 }
 
+// Store trace stages globally for modal access
+let _currentTraceStages = null;
+function setCurrentTraceStages(stages) { _currentTraceStages = stages; }
+function getCurrentTraceStages() { return _currentTraceStages; }
+
 function renderStageDetails(stages) {
     if (!stages || stages.length === 0) return '';
-    let html = '';
-    for (const stage of stages) {
+    let html = '<div style="padding:8px 0">';
+
+    // Group consecutive resolver/reflection pairs into refinement loops
+    let i = 0;
+    while (i < stages.length) {
+        const stage = stages[i];
         const stClass = stage.status || 'pending';
         const data = stage.data || {};
+        const name = stage.name;
 
         // Build rich data preview based on stage type
         let dataPreview = '';
-        const name = stage.name;
+        let expertCards = '';
+        let toolBadges = '';
 
-        // Records pipeline stages
+        // ═══ Records pipeline stages ═══
         if (name === 'stt') {
             if (data.transcript_len) dataPreview += '<span class="stage-output-badge">out</span>'+data.transcript_len+' chars';
             if (data.speaker_count) dataPreview += ' | <span class="stage-output-badge">spk</span>'+data.speaker_count;
             if (data.mode) dataPreview += ' | mock';
+            toolBadges = '<span class="tool-badge used">Whisper STT</span>';
         } else if (name === 'summarize_expert') {
             if (data.input_len) dataPreview += '<span class="stage-input-badge">in</span>'+data.input_len+' chars ';
             dataPreview += '<span class="stage-output-badge">out</span>'+(data.has_summary ? (data.summary_preview||'').substring(0,80)+'…' : 'empty');
+            toolBadges = '<span class="tool-badge used">LLM Summary</span>';
         } else if (name === 'note_expert') {
             if (data.input_len) dataPreview += '<span class="stage-input-badge">in</span>'+data.input_len+' chars ';
             dataPreview += '<span class="stage-output-badge">out</span>'+(data.has_note ? '✓ '+esc(data.note_title||'') : '✗ none');
+            toolBadges = '<span class="tool-badge used">LLM Note Extraction</span>';
         } else if (name === 'task_expert') {
             if (data.input_len) dataPreview += '<span class="stage-input-badge">in</span>'+data.input_len+' chars ';
             dataPreview += '<span class="stage-output-badge">out</span>'+data.task_count+' tasks' + (data.first_task ? ': '+esc(data.first_task).substring(0,60) : '');
+            toolBadges = '<span class="tool-badge used">LLM Task Extraction</span>';
         } else if (name === 'stack_expert') {
             if (data.input_len) dataPreview += '<span class="stage-input-badge">in</span>'+data.input_len+' chars ';
             dataPreview += '<span class="stage-output-badge">out</span>'+(data.has_stack ? '✓ '+esc(data.stack_name||'')+' ('+data.col_count+'c×'+data.row_count+'r)' : '✗ none');
+            toolBadges = '<span class="tool-badge used">LLM Table Extraction</span>';
         } else if (name === 'calendar_expert') {
             if (data.input_len) dataPreview += '<span class="stage-input-badge">in</span>'+data.input_len+' chars ';
             dataPreview += '<span class="stage-output-badge">out</span>'+(data.has_event ? '✓ '+esc(data.event_title||'') : '✗ none');
+            toolBadges = '<span class="tool-badge used">LLM Event Extraction</span>';
         } else if (name === 'assemble') {
             dataPreview += '<span class="stage-output-badge">out</span>';
             if (data.summary_preview) dataPreview += 'summary: '+esc(data.summary_preview).substring(0,60)+'…';
             dataPreview += ' | tasks:'+(data.task_count||0)+' note:'+(data.has_note?'yes':'no')+' stack:'+(data.has_stack?'yes':'no')+' cal:'+(data.has_calendar?'yes':'no');
+            toolBadges = '<span class="tool-badge used">Response Assembly</span>';
         }
-        // Voice pipeline stages
+
+        // ═══ Voice pipeline stages ═══
         else if (name === 'safety_gate') {
             dataPreview += '<span class="stage-output-badge">out</span>safe='+data.safe;
-            if (data.reason) dataPreview += ' reason='+esc(String(data.reason).substring(0,50));
+            if (data.reason) dataPreview += ' — '+esc(String(data.reason).substring(0,80));
+            toolBadges = '<span class="tool-badge used">LLM Safety Check</span>';
+            if (data.reason) {
+                expertCards += '<div class="expert-thought-card"><div class="thought-header">🛡️ Safety Verdict</div><div class="thought-body">'+esc(data.reason)+'</div></div>';
+            }
         } else if (name === 'complexity_router') {
             dataPreview += '<span class="stage-output-badge">out</span>'+esc(data.complexity||'?');
-            if (data.reasoning) dataPreview += ' '+esc(String(data.reasoning).substring(0,50));
+            if (data.reasoning) dataPreview += ' — '+esc(String(data.reasoning).substring(0,80));
+            toolBadges = '<span class="tool-badge used">Rule-based Router</span>';
+            if (data.reasoning) {
+                expertCards += '<div class="expert-thought-card"><div class="thought-header">🔀 Routing Decision</div><div class="thought-body">'+esc(data.reasoning)+'</div></div>';
+            }
         } else if (name === 'planner') {
-            dataPreview += '<span class="stage-output-badge">out</span>steps='+(data.steps||0)+' multi='+data.multi_step;
-            if (data.fallback) dataPreview += ' fallback='+data.fallback;
+            dataPreview += '<span class="stage-output-badge">out</span>'+data.steps+' step(s), multi='+data.multi_step;
+            if (data.fallback) dataPreview += ', fallback='+data.fallback;
+            toolBadges = '<span class="tool-badge used">LLM Planning</span><span class="tool-badge used">Step Decomposition</span>';
         } else if (name === 'contrarian_expert') {
-            dataPreview += '<span class="stage-output-badge">out</span>risk='+esc(data.risk||'?');
-            if (data.critique) dataPreview += ' '+esc(String(data.critique).substring(0,60));
+            dataPreview += '<span class="stage-output-badge">out</span>risk=<b>'+esc(data.risk||'?')+'</b>';
+            if (data.critique) dataPreview += ' — '+esc(String(data.critique).substring(0,100));
+            // Tool badges
+            toolBadges = '<span class="tool-badge used">Edge Case Gen</span><span class="tool-badge used">Sycophancy Detect</span><span class="tool-badge used">Risk Matrix</span>';
+            if (!data.critique || data.critique === 'Contrarian unavailable') {
+                toolBadges += '<span class="tool-badge error">LLM call failed</span>';
+            } else {
+                toolBadges += '<span class="tool-badge used">LLM Critique</span>';
+            }
+            if (data.plan_aware) toolBadges += '<span class="tool-badge used">Plan-aware</span>';
+            // Show full critique
+            if (data.critique && data.critique !== 'Contrarian unavailable') {
+                expertCards += '<div class="expert-thought-card"><div class="thought-header">⚔️ Contrarian Critique (risk: '+esc(data.risk||'?')+')</div><div class="thought-body">'+esc(data.critique)+'</div></div>';
+            }
+            if (data.error) {
+                expertCards += '<div class="expert-thought-card"><div class="thought-header" style="color:#f87171">⚠️ Error</div><div class="thought-body" style="color:#f87171">'+esc(data.error)+'</div></div>';
+            }
         } else if (name === 'research_expert') {
-            dataPreview += '<span class="stage-output-badge">out</span>conf='+Math.round((data.confidence||0)*100)+'%';
-            if (data.web_search) dataPreview += ' web:'+data.web_results+' results';
-            if (data.data_gaps && data.data_gaps.length) dataPreview += ' gaps:'+data.data_gaps.length;
+            dataPreview += '<span class="stage-output-badge">out</span>conf=<b>'+Math.round((data.confidence||0)*100)+'%</b>';
+            if (data.web_search) dataPreview += ' | web:'+data.web_results+' results';
+            if (data.data_gaps && data.data_gaps.length) dataPreview += ' | <span style="color:#ffa657">'+data.data_gaps.length+' gaps</span>';
+            // Tool badges
+            toolBadges = '<span class="tool-badge used">Workspace Facts</span>';
+            if (data.web_search) toolBadges += '<span class="tool-badge used">Web Search</span>';
+            else toolBadges += '<span class="tool-badge skipped">No Web Search</span>';
+            toolBadges += '<span class="tool-badge used">LLM Grounding</span>';
+            // Show data gaps
+            if (data.data_gaps && data.data_gaps.length > 0) {
+                let gapHTML = '<ul class="gap-list">';
+                data.data_gaps.forEach(g => { gapHTML += '<li>⚠ '+esc(g)+'</li>'; });
+                gapHTML += '</ul>';
+                expertCards += '<div class="expert-thought-card"><div class="thought-header">🔍 Data Gaps ('+data.data_gaps.length+')</div><div class="thought-body">'+gapHTML+'</div></div>';
+            }
+            if (data.findings_len) {
+                expertCards += '<div class="expert-thought-card"><div class="thought-header">📚 Research Findings ('+data.findings_len+' chars)</div><div class="thought-body">Web search results synthesized for downstream use.</div></div>';
+            }
         } else if (name === 'conversation_expert') {
-            dataPreview += '<span class="stage-output-badge">out</span>lang='+esc(data.language||'?')+' tone='+esc(data.tone||'?');
-            if (data.intent) dataPreview += ' intent='+esc(String(data.intent).substring(0,50));
+            dataPreview += '<span class="stage-output-badge">out</span>lang='+esc(data.language||'?')+' | tone='+esc(data.tone||'?');
+            if (data.has_ambiguity) dataPreview += ' | <span style="color:#ffa657">ambiguous</span>';
+            if (data.intent) dataPreview += ' — '+esc(String(data.intent).substring(0,60));
+            // Tool badges
+            toolBadges = '<span class="tool-badge used">Lang Detection</span><span class="tool-badge used">Tone Classifier</span><span class="tool-badge used">Ambiguity Check</span>';
+            if (data.plan_aware) toolBadges += '<span class="tool-badge used">Plan-intent Align</span>';
+            toolBadges += '<span class="tool-badge used">LLM Intent</span>';
+            // Show full intent
+            if (data.intent) {
+                expertCards += '<div class="expert-thought-card"><div class="thought-header">💬 Extracted Intent</div><div class="thought-body">'+esc(data.intent)+'</div></div>';
+            }
         } else if (name === 'synthesizer') {
-            dataPreview += '<span class="stage-output-badge">out</span>experts='+(data.experts_combined||0)+' plan='+(data.has_plan?'yes':'no')+' directive='+(data.directive_len||0)+' chars';
+            dataPreview += '<span class="stage-output-badge">out</span>combined '+data.experts_combined+' experts → directive ('+data.directive_len+' chars)';
+            toolBadges = '<span class="tool-badge used">Expert Fusion</span><span class="tool-badge used">Directive Gen</span>';
+            // Show interaction chain
+            expertCards += '<div class="expert-thought-card"><div class="thought-header">🔗 Synthesizer — Expert Fusion</div><div class="thought-body">Combined outputs from '+data.experts_combined+' experts'+(data.has_plan?' + execution plan':'')+' into a resolver directive.</div></div>';
         } else if (name && name.startsWith('resolver')) {
-            dataPreview += '<span class="stage-output-badge">out</span>action='+esc(data.action||'?');
+            dataPreview += '<span class="stage-output-badge">out</span>action=<b>'+esc(data.action||'?')+'</b>';
             if (data.has_reply) dataPreview += ' +reply';
-            if (data.refinement) dataPreview += ' (refine#'+data.refinement+')';
+            if (data.refinement !== undefined && data.refinement > 0) dataPreview += ' <span class="refine-loop-badge">refine #'+data.refinement+'</span>';
+            toolBadges = '<span class="tool-badge used">LLM NLU</span>';
+            if (data.action === 'summarize_context') toolBadges += '<span class="tool-badge used">Summarization</span>';
+            if (data.refinement) toolBadges += '<span class="tool-badge warning">Refinement loop</span>';
+            // Show error details
+            if (data.error) {
+                expertCards += '<div class="expert-thought-card"><div class="thought-header" style="color:#f87171">⚠️ Validation Error</div><div class="thought-body code" style="color:#f87171">'+esc(data.error)+'</div></div>';
+            }
         } else if (name === 'reflection') {
-            dataPreview += '<span class="stage-output-badge">out</span>score='+Math.round((data.score||0)*100)+'%';
-            if (data.needs_refinement) dataPreview += ' needs_refine';
-            if (data.issues_count) dataPreview += ' issues:'+data.issues_count;
+            dataPreview += '<span class="stage-output-badge">out</span>score=<b>'+Math.round((data.score||0)*100)+'%</b>';
+            if (data.needs_refinement) dataPreview += ' | needs refine';
+            if (data.issues_count) dataPreview += ' | <span style="color:#f87171">'+data.issues_count+' issues</span>';
+            if (data.accepted) dataPreview += ' | <span style="color:#7ee787">accepted ('+esc(data.reason||'')+')</span>';
+            toolBadges = '<span class="tool-badge used">LLM Self-Critique</span><span class="tool-badge used">Quality Gate</span>';
+            // Show issues if available
+            if (data.issues_count && data.issues_count > 0) {
+                expertCards += '<div class="expert-thought-card"><div class="thought-header">🪞 Reflection — '+data.issues_count+' issues found (score: '+Math.round((data.score||0)*100)+'%)</div><div class="thought-body">The resolver output had issues. Reflection triggered a refinement loop to fix the output.</div></div>';
+            }
+            if (data.accepted) {
+                expertCards += '<div class="expert-thought-card"><div class="thought-header" style="color:#7ee787">✅ Accepted</div><div class="thought-body">Reason: '+esc(data.reason||'')+'</div></div>';
+            }
         } else {
             // Generic fallback
             if (data && Object.keys(data).length > 0) {
@@ -1391,17 +1640,37 @@ function renderStageDetails(stages) {
             }
         }
 
-        html += '<div class="stage-detail-item">';
+        // ── Build stage detail item ──
+        html += '<div class="stage-detail-item" style="flex-wrap:wrap;align-items:flex-start;padding:10px 16px">';
         html += '<div class="stage-status-dot '+stClass+'"></div>';
-        html += '<span class="stage-name">'+esc(stage.name)+'</span>';
-        html += '<span class="stage-data">'+dataPreview+'</span>';
+        html += '<span class="stage-name">'+esc(name)+'</span>';
+        html += '<span class="stage-data" style="flex:1;min-width:200px">'+dataPreview+'</span>';
         // Model/token badges
         if (data.model) html += '<span class="model-badge" title="Model">'+esc(data.model)+'</span>';
         if (data.provider) html += '<span class="provider-badge" title="Provider">'+esc(data.provider)+'</span>';
-        if (data.total_tokens) html += '<span class="token-badge" title="Prompt: '+data.prompt_tokens+' | Completion: '+data.completion_tokens+'">'+data.total_tokens+' tok</span>';
+        if (data.total_tokens) html += '<span class="token-badge total" title="Prompt: '+(data.prompt_tokens||0)+' | Completion: '+(data.completion_tokens||0)+'">'+(data.total_tokens||0)+' tok</span>';
         html += '<span class="stage-dur">'+(stage.duration_ms||0)+'ms</span>';
         html += '</div>';
+
+        // Tool badges row
+        if (toolBadges) {
+            html += '<div style="padding:2px 16px 4px 46px;font-size:.65rem">'+toolBadges+'</div>';
+        }
+
+        // Expert thought cards
+        if (expertCards) {
+            html += expertCards;
+        }
+
+        // Reflection → Resolver loop indicator
+        if (name === 'reflection' && data.needs_refinement && i+1 < stages.length && stages[i+1].name.startsWith('resolver')) {
+            html += '<div style="text-align:center;padding:4px;color:#d2a8ff;font-size:.7rem">🪞 → 🎯 <span class="refine-loop-badge">Refinement Loop — Resolver retries with reflection feedback</span></div>';
+        }
+
+        i++;
     }
+
+    html += '</div>';
     return html;
 }
 
@@ -1573,11 +1842,11 @@ function renderDataFlow(trace, mode, respBody) {
 
     return '<div class="data-flow-section">'+
         '<div class="flow-header" onclick="toggleFlowSection(this)">'+
-        '<span class="arrow">&#9654;</span>'+
-        '<span>🔗 Data Flow Trace ('+stages.length+' stages)</span>'+
-        '<span style="margin-left:auto;font-size:.7rem;color:#8b949e">Click to expand</span>'+
+        '<span class="arrow open">&#9654;</span>'+
+        '<span>🔗 Data Flow Trace ('+stages.length+' stages) — Expert Interactions</span>'+
+        '<span style="margin-left:auto;font-size:.7rem;color:#8b949e">Click to collapse</span>'+
         '</div>'+
-        '<div class="data-flow-body collapsed">'+html+'</div>'+
+        '<div class="data-flow-body">'+html+'</div>'+
         '</div>';
 }
 
@@ -1650,6 +1919,221 @@ function toggleLLMSection(h) {
     if(b){b.classList.toggle('collapsed'); if(a)a.classList.toggle('open');}
 }
 
+function closeExpertModal() {
+    const overlay = document.querySelector('.expert-modal-overlay');
+    if (overlay) overlay.remove();
+}
+
+// ── Expert Deep-Dive Modal ──
+function showExpertModal(stageId) {
+    const stages = getCurrentTraceStages();
+    if (!stages) return;
+
+    // Find matching stage(s) — handle resolver refinements (resolver, resolver_r1, etc.)
+    const matching = stages.filter(s => s.name === stageId || s.name.startsWith(stageId));
+    if (matching.length === 0) return;
+
+    // Remove existing modal
+    const existing = document.querySelector('.expert-modal-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'expert-modal-overlay';
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) overlay.remove();
+    });
+
+    let modalHTML = '<div class="expert-modal">';
+    modalHTML += '<div class="modal-header">';
+    modalHTML += '<span style="font-size:1.5rem">'+getExpertIcon(stageId)+'</span>';
+    modalHTML += '<h2>'+getExpertTitle(stageId)+'</h2>';
+    modalHTML += '<button class="modal-close" onclick="closeExpertModal()">✕</button>';
+    modalHTML += '</div>';
+    modalHTML += '<div class="modal-body">';
+
+    // Render each matching stage (for refinements, show all iterations)
+    matching.forEach((stage, idx) => {
+        if (matching.length > 1) {
+            modalHTML += '<div class="modal-section-title" style="margin-top:8px">Iteration '+(idx+1)+'</div>';
+        }
+        modalHTML += buildExpertModalContent(stage);
+    });
+
+    modalHTML += '</div></div>';
+    overlay.innerHTML = modalHTML;
+    document.body.appendChild(overlay);
+}
+
+function getExpertIcon(stageId) {
+    const icons = {
+        'safety_gate': '🛡️', 'complexity_router': '🔀', 'planner': '📋',
+        'contrarian_expert': '⚔️', 'research_expert': '🔍', 'conversation_expert': '💬',
+        'synthesizer': '🔗', 'resolver': '🎯', 'reflection': '🪞',
+        'stt': '🎙️', 'summarize_expert': '📝', 'note_expert': '📄',
+        'task_expert': '✅', 'stack_expert': '📊', 'calendar_expert': '📅', 'assemble': '📦'
+    };
+    // Handle resolver_r1, resolver_r2 etc.
+    if (stageId.startsWith('resolver')) return '🎯';
+    return icons[stageId] || '🔹';
+}
+
+function getExpertTitle(stageId) {
+    const titles = {
+        'safety_gate': 'Safety Gate', 'complexity_router': 'Complexity Router', 'planner': 'Planner',
+        'contrarian_expert': 'Contrarian Expert', 'research_expert': 'Research Expert',
+        'conversation_expert': 'Conversation Expert', 'synthesizer': 'Synthesizer',
+        'resolver': 'Resolver (NLU)', 'reflection': 'Reflection',
+        'stt': 'Speech-to-Text', 'summarize_expert': 'Summary Expert',
+        'note_expert': 'Note Expert', 'task_expert': 'Task Expert',
+        'stack_expert': 'Stack Expert', 'calendar_expert': 'Calendar Expert', 'assemble': 'Assembly'
+    };
+    if (stageId.startsWith('resolver')) return 'Resolver (NLU) — Iteration '+(stageId.replace('resolver_r','')||'1');
+    return titles[stageId] || stageId;
+}
+
+function buildExpertModalContent(stage) {
+    const data = stage.data || {};
+    const name = stage.name;
+    let html = '';
+
+    // ── Status & duration ──
+    html += '<div class="modal-section">';
+    html += '<div class="modal-section-title">📊 Status</div>';
+    html += '<div class="modal-section-content">';
+    html += 'Status: <b style="color:'+(stage.status==='passed'?'#7ee787':stage.status==='failed'?'#f87171':'#8b949e')+'">'+esc(stage.status||'?')+'</b> | ';
+    html += 'Duration: <b>'+stage.duration_ms+'ms</b>';
+    if (data.model) html += ' | Model: <b style="color:#d2a8ff">'+esc(data.model)+'</b>';
+    if (data.provider) html += ' | Provider: <b style="color:#a5d6ff">'+esc(data.provider)+'</b>';
+    if (data.total_tokens) html += ' | Tokens: <b style="color:#ffa657">'+(data.prompt_tokens||0)+' in + '+(data.completion_tokens||0)+' out = '+data.total_tokens+' total</b>';
+    html += '</div></div>';
+
+    // ── Tool usage ──
+    const tools = getToolsForStage(name, data);
+    if (tools.length > 0) {
+        html += '<div class="modal-section">';
+        html += '<div class="modal-section-title">🔧 Tools Used</div>';
+        html += '<div class="modal-section-content">';
+        tools.forEach(t => {
+            html += '<span class="tool-badge '+t.cls+'">'+esc(t.name)+'</span> ';
+        });
+        html += '</div></div>';
+    }
+
+    // ── Stage-specific data ──
+    if (name === 'safety_gate') {
+        if (data.reason) {
+            html += '<div class="modal-section"><div class="modal-section-title">🛡️ Verdict</div><div class="modal-section-content">'+esc(data.reason)+'</div></div>';
+        }
+    } else if (name === 'complexity_router') {
+        if (data.reasoning) {
+            html += '<div class="modal-section"><div class="modal-section-title">🔀 Routing Reasoning</div><div class="modal-section-content">'+esc(data.reasoning)+'</div></div>';
+        }
+    } else if (name === 'contrarian_expert') {
+        if (data.critique && data.critique !== 'Contrarian unavailable') {
+            html += '<div class="modal-section"><div class="modal-section-title">⚔️ Critique (risk: '+esc(data.risk||'?')+')</div><div class="modal-section-content">'+esc(data.critique)+'</div></div>';
+        }
+        if (data.plan_aware) {
+            html += '<div class="modal-section"><div class="modal-section-title">📋 Plan-Aware</div><div class="modal-section-content">Critique was based on the execution plan from the Planner node.</div></div>';
+        }
+        if (data.error) {
+            html += '<div class="modal-section"><div class="modal-section-title" style="color:#f87171">⚠️ Error</div><div class="modal-section-content code" style="color:#f87171">'+esc(data.error)+'</div></div>';
+        }
+    } else if (name === 'research_expert') {
+        if (data.data_gaps && data.data_gaps.length > 0) {
+            let gapHTML = '<ul class="gap-list">';
+            data.data_gaps.forEach(g => { gapHTML += '<li>⚠ '+esc(g)+'</li>'; });
+            gapHTML += '</ul>';
+            html += '<div class="modal-section"><div class="modal-section-title">🔍 Data Gaps ('+data.data_gaps.length+')</div><div class="modal-section-content">'+gapHTML+'</div></div>';
+        }
+        html += '<div class="modal-section"><div class="modal-section-title">📊 Research Metrics</div><div class="modal-section-content">';
+        html += 'Confidence: <b>'+Math.round((data.confidence||0)*100)+'%</b><br>';
+        html += 'Web search: <b>'+(data.web_search?'Yes ('+data.web_results+' results)':'No')+'</b><br>';
+        html += 'Findings length: <b>'+(data.findings_len||0)+' chars</b>';
+        html += '</div></div>';
+    } else if (name === 'conversation_expert') {
+        if (data.intent) {
+            html += '<div class="modal-section"><div class="modal-section-title">💬 Extracted Intent</div><div class="modal-section-content">'+esc(data.intent)+'</div></div>';
+        }
+        html += '<div class="modal-section"><div class="modal-section-title">🗣️ Language & Tone</div><div class="modal-section-content">';
+        html += 'Language: <b>'+esc(data.language||'?')+'</b> | Tone: <b>'+esc(data.tone||'?')+'</b> | Ambiguity: <b>'+(data.has_ambiguity?'Yes ⚠️':'No')+'</b>';
+        html += '</div></div>';
+    } else if (name === 'synthesizer') {
+        html += '<div class="modal-section"><div class="modal-section-title">🔗 Expert Fusion</div><div class="modal-section-content">';
+        html += 'Combined <b>'+data.experts_combined+'</b> expert outputs'+(data.has_plan?' + execution plan':'')+' into a resolver directive.<br>';
+        html += 'Directive length: <b>'+data.directive_len+' chars</b>';
+        html += '</div></div>';
+    } else if (name && name.startsWith('resolver')) {
+        if (data.error) {
+            html += '<div class="modal-section"><div class="modal-section-title" style="color:#f87171">⚠️ Validation Error</div><div class="modal-section-content code" style="color:#f87171">'+esc(data.error)+'</div></div>';
+        }
+        html += '<div class="modal-section"><div class="modal-section-title">🎯 Resolver Output</div><div class="modal-section-content">';
+        html += 'Action: <b style="color:#7ee787">'+esc(data.action||'?')+'</b><br>';
+        if (data.has_reply) html += 'Has conversational reply: <b>Yes</b><br>';
+        if (data.refinement !== undefined) html += 'Refinement iteration: <b>#'+data.refinement+'</b>';
+        html += '</div></div>';
+    } else if (name === 'reflection') {
+        html += '<div class="modal-section"><div class="modal-section-title">🪞 Reflection Verdict</div><div class="modal-section-content">';
+        html += 'Score: <b style="color:'+(data.score>0.7?'#7ee787':'#ffa657')+'">'+Math.round((data.score||0)*100)+'%</b><br>';
+        html += 'Needs refinement: <b>'+(data.needs_refinement?'Yes ⚠️':'No ✅')+'</b><br>';
+        if (data.issues_count) html += 'Issues found: <b style="color:#f87171">'+data.issues_count+'</b><br>';
+        if (data.accepted) html += 'Final decision: <b style="color:#7ee787">Accepted</b> — '+esc(data.reason||'')+'<br>';
+        html += '</div></div>';
+    }
+
+    // ── Raw data (collapsible) ──
+    html += '<div class="modal-section">';
+    html += '<div class="modal-section-title toggle-raw-data" style="cursor:pointer">📋 Raw Stage Data (click to toggle)</div>';
+    html += '<div class="modal-section-content code raw-data-hidden" style="display:none">'+esc(JSON.stringify(data, null, 2))+'</div>';
+    html += '</div>';
+
+    return html;
+}
+
+function getToolsForStage(name, data) {
+    const tools = [];
+    if (name === 'safety_gate') {
+        tools.push({name:'LLM Safety Screening', cls:'used'});
+    } else if (name === 'complexity_router') {
+        tools.push({name:'Rule-based Router', cls:'used'});
+    } else if (name === 'planner') {
+        tools.push({name:'LLM Planning', cls:'used'});
+        tools.push({name:'Step Decomposition', cls:'used'});
+    } else if (name === 'contrarian_expert') {
+        tools.push({name:'Edge Case Generator', cls:'used'});
+        tools.push({name:'Sycophancy Detector', cls:'used'});
+        tools.push({name:'Risk Matrix', cls:'used'});
+        if (data.plan_aware) tools.push({name:'Plan-aware Critique', cls:'used'});
+        if (!data.critique || data.critique === 'Contrarian unavailable') {
+            tools.push({name:'LLM call FAILED', cls:'error'});
+        } else {
+            tools.push({name:'LLM Critique', cls:'used'});
+        }
+    } else if (name === 'research_expert') {
+        tools.push({name:'Workspace Fact Extraction', cls:'used'});
+        if (data.web_search) tools.push({name:'Web Search (DuckDuckGo)', cls:'used'});
+        else tools.push({name:'Web Search', cls:'skipped'});
+        tools.push({name:'LLM Grounding', cls:'used'});
+    } else if (name === 'conversation_expert') {
+        tools.push({name:'Language Detector', cls:'used'});
+        tools.push({name:'Tone Classifier', cls:'used'});
+        tools.push({name:'Ambiguity Scanner', cls:'used'});
+        if (data.plan_aware) tools.push({name:'Plan-Intent Alignment', cls:'used'});
+        tools.push({name:'LLM Intent Extraction', cls:'used'});
+    } else if (name === 'synthesizer') {
+        tools.push({name:'Expert Fusion Engine', cls:'used'});
+        tools.push({name:'Directive Generator', cls:'used'});
+    } else if (name && name.startsWith('resolver')) {
+        tools.push({name:'LLM NLU Resolution', cls:'used'});
+        if (data.action === 'summarize_context') tools.push({name:'Context Summarization', cls:'used'});
+        if (data.refinement) tools.push({name:'Refinement Loop', cls:'warning'});
+    } else if (name === 'reflection') {
+        tools.push({name:'LLM Self-Critique', cls:'used'});
+        tools.push({name:'Quality Gate', cls:'used'});
+        if (data.needs_refinement) tools.push({name:'Retry Trigger', cls:'warning'});
+    }
+    return tools;
+}
+
 function renderDetail(entry) {
     const panel = document.getElementById('detailPanel');
     const req = entry.request || {};
@@ -1668,6 +2152,9 @@ function renderDetail(entry) {
     const isRecords = mode === 'automate';
     let sections = '';
 
+    // Store trace stages for expert modal access
+    setCurrentTraceStages(trace ? trace.stages : null);
+
     // ── Pipeline Visualization (always on top) ──
     sections += renderPipelineViz(trace, mode);
 
@@ -1681,8 +2168,8 @@ function renderDetail(entry) {
 
     // ── Pipeline Stage Details ──
     if (trace && trace.stages && trace.stages.length > 0) {
-        sections += buildSection('pipeline-stages', '📊 Pipeline Stage Details ('+trace.stages.length+' stages)', 'stage', 'stages',
-            '<div style="padding:0">'+renderStageDetails(trace.stages)+'</div>', false);
+        sections += buildSection('pipeline-stages', '📊 Pipeline Stage Details — Expert Thoughts, Tools & Results ('+trace.stages.length+' stages)', 'stage', 'stages',
+            '<div style="padding:0">'+renderStageDetails(trace.stages)+'</div>', true);
     }
 
     // ── Request: Metadata ──
@@ -1823,6 +2310,18 @@ loadExisting();
 connectSSE();
 connectPipelineSSE();
 addJSONExportButton();
+
+// Delegated click: toggle raw data in expert modal
+document.addEventListener('click', function(e) {
+    const toggle = e.target.closest('.toggle-raw-data');
+    if (toggle) {
+        const content = toggle.nextElementSibling;
+        if (content) {
+            const isHidden = content.style.display === 'none';
+            content.style.display = isHidden ? 'block' : 'none';
+        }
+    }
+});
 </script>
 </body>
 </html>

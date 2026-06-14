@@ -331,8 +331,12 @@ async def run_contrarian(
     try:
         raw = await _call_expert("Contrarian", CONTRARIAN_SYSTEM, user_msg)
         data = clean_json_output(raw)
+        # Flatten dict critique → string (LLM sometimes returns per-step dict)
+        critique_raw = data.get("critique", "")
+        if isinstance(critique_raw, dict):
+            critique_raw = "; ".join(f"{k}: {v}" for k, v in critique_raw.items())
         return ContrarianOutput(
-            critique=data.get("critique", ""),
+            critique=critique_raw,
             risk=data.get("risk", "low"),
             alternative_action=data.get("alternative_action"),
         ), reasoning

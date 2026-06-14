@@ -498,13 +498,15 @@ def extract_workspace_facts(
                     "value": f"row={focused.get('rowId', '')}, col={focused.get('columnId', '')}, current={focused.get('currentValue', '')}",
                 })
 
-            # Note content length
+            # Note content length + preview (so Research expert can verify data exists)
             if isinstance(content, str) and len(content) > 10:
                 facts["data_stats"]["content_length"] = len(content)
+                facts["data_stats"]["content_preview"] = content[:500]
             elif content_is_dict:
                 note_content = content.get("content", "")
                 if isinstance(note_content, str) and len(note_content) > 10:
                     facts["data_stats"]["content_length"] = len(note_content)
+                    facts["data_stats"]["content_preview"] = note_content[:500]
 
         # Detect missing critical data
         context_type = facts["context_type"]
@@ -1177,7 +1179,9 @@ def format_workspace_for_llm(workspace_facts: Dict[str, Any]) -> str:
     if stats:
         lines.append("Data Statistics:")
         for k, v in stats.items():
-            if isinstance(v, list):
+            if k == "content_preview":
+                lines.append(f"  content_preview: \"{v}\"")
+            elif isinstance(v, list):
                 lines.append(f"  {k}: {', '.join(str(x) for x in v)}")
             else:
                 lines.append(f"  {k}: {v}")

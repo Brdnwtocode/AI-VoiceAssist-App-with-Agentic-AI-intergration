@@ -1,0 +1,376 @@
+{
+  "_exportVersion": 1,
+  "sessionName": "Main Session",
+  "exportedAt": "2026-06-14T04:32:05.641Z",
+  "entries": [
+    {
+      "id": "1781411405668335996",
+      "timestamp": "04:30:05",
+      "summary": "[NOTE] \"Summarize content\"",
+      "method": "POST",
+      "path": "/api/v1/voice/process",
+      "action": "none",
+      "mode": "",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/voice/process",
+        "query_string": "",
+        "client": "Address(host='172.18.0.1', port=46354)",
+        "headers": {
+          "host": "host.docker.internal:8000",
+          "connection": "keep-alive",
+          "x-session-id": "f8772f3c-710c-4878-a689-a9876acd0bca",
+          "x-user-id": "6387644e-5636-4691-a7b5-f95a73f5122b",
+          "content-type": "multipart/form-data; boundary=----formdata-undici-065349512480",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "723"
+        },
+        "form_fields": {
+          "context_type": "NOTE",
+          "context_id": "a21531fe-67ee-483a-a1df-76d406867fe7",
+          "cursor_position": "35",
+          "transcript": "Summarize content",
+          "packed_context": "{\"items\":[{\"type\":\"NOTE\",\"id\":\"a21531fe-67ee-483a-a1df-76d406867fe7\",\"title\":\"Bugs\",\"source\":\"active_tab\",\"content\":\"many bugs not fixed \\\\\\ntheres 6 bugs\\n\",\"metadata\":{\"cursorPosition\":35,\"title\":\"Bugs\"}}],\"packedAt\":\"2026-06-14T04:29:54.121Z\",\"totalItems\":1}"
+        },
+        "audio_info": null
+      },
+      "response": {
+        "content_type": "application/json",
+        "body": {
+          "transcript": "Summarize content",
+          "action": "none",
+          "success": true,
+          "message": "No action recognized from command",
+          "updatedData": null,
+          "reply": null
+        }
+      },
+      "duration_ms": 13139.6,
+      "status_code": 200,
+      "pipeline_trace": {
+        "id": "16d329f8-3d8c-44e6-9ea8-d29abdc891dc",
+        "timestamp": "04:29:52",
+        "transcript": "Summarize content",
+        "context_type": "NOTE",
+        "stages": [
+          {
+            "name": "safety_gate",
+            "status": "passed",
+            "data": {
+              "safe": true,
+              "reason": "normal workspace command",
+              "model": "llama-3.1-8b-instant",
+              "provider": "unknown",
+              "prompt_tokens": 363,
+              "completion_tokens": 14,
+              "total_tokens": 377
+            },
+            "duration_ms": 106.3,
+            "timestamp": "04:29:55"
+          },
+          {
+            "name": "complexity_router",
+            "status": "passed",
+            "data": {
+              "complexity": "complex",
+              "reasoning": "Contains reasoning/analysis/research/summarization trigger word"
+            },
+            "duration_ms": 0,
+            "timestamp": "04:29:55"
+          },
+          {
+            "name": "planner",
+            "status": "passed",
+            "data": {
+              "multi_step": false,
+              "fallback": "summarize_context"
+            },
+            "duration_ms": 1,
+            "timestamp": "04:29:55"
+          },
+          {
+            "name": "conversation_expert",
+            "status": "passed",
+            "data": {
+              "language": "mixed",
+              "tone": "query",
+              "intent": "Summarize content",
+              "has_ambiguity": true,
+              "plan_aware": true,
+              "model": "llama-3.1-8b-instant",
+              "provider": "unknown",
+              "prompt_tokens": 688,
+              "completion_tokens": 37,
+              "total_tokens": 725
+            },
+            "duration_ms": 133.8,
+            "timestamp": "04:29:55"
+          },
+          {
+            "name": "research_expert",
+            "status": "passed",
+            "data": {
+              "confidence": 0,
+              "data_gaps": [
+                "Step 1 (summarize_context) needs context: NOTE is present, but context is missing."
+              ],
+              "web_search": false,
+              "web_results": 0,
+              "findings_len": 0,
+              "model": "llama-3.1-8b-instant",
+              "provider": "unknown",
+              "prompt_tokens": 934,
+              "completion_tokens": 106,
+              "total_tokens": 1040
+            },
+            "duration_ms": 272.1,
+            "timestamp": "04:29:55"
+          },
+          {
+            "name": "contrarian_expert",
+            "status": "failed",
+            "data": {
+              "error": "1 validation error for ContrarianOutput\ncritique\n  Input should be a valid string [type=string_type, input_value={'Step 1': \"What if the n...ailable for this step.'}, input_type=dict]\n    For further "
+            },
+            "duration_ms": 334.5,
+            "timestamp": "04:29:55"
+          },
+          {
+            "name": "synthesizer",
+            "status": "passed",
+            "data": {
+              "experts_combined": 3,
+              "has_plan": true,
+              "directive_len": 1161
+            },
+            "duration_ms": 0.1,
+            "timestamp": "04:29:55"
+          },
+          {
+            "name": "resolver",
+            "status": "failed",
+            "data": {
+              "error": "validation: 1 validation error for SummarizeContextParams\nsummary\n  Field required [type=missing, input_value={'context_id': 'a21531fe-... 'context_type': 'NOTE'}, input_type=dict]\n    For further inf",
+              "action": "summarize_context",
+              "model": "gemini-2.5-flash",
+              "provider": "unknown",
+              "prompt_tokens": 1520,
+              "completion_tokens": 909,
+              "total_tokens": 2429
+            },
+            "duration_ms": 4735.4,
+            "timestamp": "04:30:00"
+          },
+          {
+            "name": "reflection",
+            "status": "passed",
+            "data": {
+              "score": 0.4,
+              "needs_refinement": true,
+              "issues_count": 3,
+              "model": "llama-3.1-8b-instant",
+              "provider": "unknown",
+              "prompt_tokens": 692,
+              "completion_tokens": 160,
+              "total_tokens": 852
+            },
+            "duration_ms": 302.9,
+            "timestamp": "04:30:00"
+          },
+          {
+            "name": "resolver",
+            "status": "failed",
+            "data": {
+              "error": "validation: 1 validation error for SummarizeContextParams\nsummary\n  Field required [type=missing, input_value={'context': [{'type': 'NO...14T04:29:52.528793Z'}}]}, input_type=dict]\n    For further inf",
+              "action": "summarize_context",
+              "model": "gemini-2.5-flash",
+              "provider": "unknown",
+              "prompt_tokens": 1674,
+              "completion_tokens": 786,
+              "total_tokens": 2460
+            },
+            "duration_ms": 3907.5,
+            "timestamp": "04:30:04"
+          },
+          {
+            "name": "reflection",
+            "status": "passed",
+            "data": {
+              "accepted": true,
+              "reason": "max_iterations"
+            },
+            "duration_ms": 0.2,
+            "timestamp": "04:30:04"
+          }
+        ],
+        "status": "completed",
+        "total_duration_ms": 13139
+      }
+    }
+  ],
+  "pipelineTraces": {
+    "16d329f8-3d8c-44e6-9ea8-d29abdc891dc": {
+      "id": "16d329f8-3d8c-44e6-9ea8-d29abdc891dc",
+      "timestamp": "04:29:52",
+      "transcript": "Summarize content",
+      "context_type": "NOTE",
+      "stages": [
+        {
+          "name": "safety_gate",
+          "status": "passed",
+          "data": {
+            "safe": true,
+            "reason": "normal workspace command",
+            "model": "llama-3.1-8b-instant",
+            "provider": "unknown",
+            "prompt_tokens": 363,
+            "completion_tokens": 14,
+            "total_tokens": 377
+          },
+          "duration_ms": 106.3,
+          "timestamp": "04:29:55"
+        },
+        {
+          "name": "complexity_router",
+          "status": "passed",
+          "data": {
+            "complexity": "complex",
+            "reasoning": "Contains reasoning/analysis/research/summarization trigger word"
+          },
+          "duration_ms": 0,
+          "timestamp": "04:29:55"
+        },
+        {
+          "name": "planner",
+          "status": "passed",
+          "data": {
+            "multi_step": false,
+            "fallback": "summarize_context"
+          },
+          "duration_ms": 1,
+          "timestamp": "04:29:55"
+        },
+        {
+          "name": "conversation_expert",
+          "status": "passed",
+          "data": {
+            "language": "mixed",
+            "tone": "query",
+            "intent": "Summarize content",
+            "has_ambiguity": true,
+            "plan_aware": true,
+            "model": "llama-3.1-8b-instant",
+            "provider": "unknown",
+            "prompt_tokens": 688,
+            "completion_tokens": 37,
+            "total_tokens": 725
+          },
+          "duration_ms": 133.8,
+          "timestamp": "04:29:55"
+        },
+        {
+          "name": "research_expert",
+          "status": "passed",
+          "data": {
+            "confidence": 0,
+            "data_gaps": [
+              "Step 1 (summarize_context) needs context: NOTE is present, but context is missing."
+            ],
+            "web_search": false,
+            "web_results": 0,
+            "findings_len": 0,
+            "model": "llama-3.1-8b-instant",
+            "provider": "unknown",
+            "prompt_tokens": 934,
+            "completion_tokens": 106,
+            "total_tokens": 1040
+          },
+          "duration_ms": 272.1,
+          "timestamp": "04:29:55"
+        },
+        {
+          "name": "contrarian_expert",
+          "status": "failed",
+          "data": {
+            "error": "1 validation error for ContrarianOutput\ncritique\n  Input should be a valid string [type=string_type, input_value={'Step 1': \"What if the n...ailable for this step.'}, input_type=dict]\n    For further "
+          },
+          "duration_ms": 334.5,
+          "timestamp": "04:29:55"
+        },
+        {
+          "name": "synthesizer",
+          "status": "passed",
+          "data": {
+            "experts_combined": 3,
+            "has_plan": true,
+            "directive_len": 1161
+          },
+          "duration_ms": 0.1,
+          "timestamp": "04:29:55"
+        },
+        {
+          "name": "resolver",
+          "status": "failed",
+          "data": {
+            "error": "validation: 1 validation error for SummarizeContextParams\nsummary\n  Field required [type=missing, input_value={'context_id': 'a21531fe-... 'context_type': 'NOTE'}, input_type=dict]\n    For further inf",
+            "action": "summarize_context",
+            "model": "gemini-2.5-flash",
+            "provider": "unknown",
+            "prompt_tokens": 1520,
+            "completion_tokens": 909,
+            "total_tokens": 2429
+          },
+          "duration_ms": 4735.4,
+          "timestamp": "04:30:00"
+        },
+        {
+          "name": "reflection",
+          "status": "passed",
+          "data": {
+            "score": 0.4,
+            "needs_refinement": true,
+            "issues_count": 3,
+            "model": "llama-3.1-8b-instant",
+            "provider": "unknown",
+            "prompt_tokens": 692,
+            "completion_tokens": 160,
+            "total_tokens": 852
+          },
+          "duration_ms": 302.9,
+          "timestamp": "04:30:00"
+        },
+        {
+          "name": "resolver",
+          "status": "failed",
+          "data": {
+            "error": "validation: 1 validation error for SummarizeContextParams\nsummary\n  Field required [type=missing, input_value={'context': [{'type': 'NO...14T04:29:52.528793Z'}}]}, input_type=dict]\n    For further inf",
+            "action": "summarize_context",
+            "model": "gemini-2.5-flash",
+            "provider": "unknown",
+            "prompt_tokens": 1674,
+            "completion_tokens": 786,
+            "total_tokens": 2460
+          },
+          "duration_ms": 3907.5,
+          "timestamp": "04:30:04"
+        },
+        {
+          "name": "reflection",
+          "status": "passed",
+          "data": {
+            "accepted": true,
+            "reason": "max_iterations"
+          },
+          "duration_ms": 0.2,
+          "timestamp": "04:30:04"
+        }
+      ],
+      "status": "completed",
+      "total_duration_ms": 13139
+    }
+  }
+}

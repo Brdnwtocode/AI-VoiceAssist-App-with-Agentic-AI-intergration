@@ -30,6 +30,7 @@ async def root():
             "tester": "/tester",
             "live-viewer": "/live-viewer",
             "api": "/api/v1/voice/process",
+            "records_api": "/api/v1/records/automate",
         }
     )
 

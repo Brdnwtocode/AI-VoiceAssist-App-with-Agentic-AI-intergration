@@ -68,6 +68,28 @@ class LiveEntry:
     def _build_summary(self) -> str:
         body = self.request.get("body", {})
         if isinstance(body, dict):
+            # ── Records/automate entries ──
+            mode = body.get("mode", "")
+            if mode == "automate":
+                parts = []
+                hint = body.get("action", "full_automate")
+                recording_id = body.get("recording_id", "")
+                has_audio = body.get("has_audio", False)
+                has_transcript = body.get("has_transcript", False)
+                parts.append(f"[records/{hint}]")
+                if recording_id:
+                    parts.append(f"rec:{recording_id[:8]}...")
+                if has_audio:
+                    parts.append("(audio)")
+                if has_transcript:
+                    preview = (body.get("transcript_preview") or "")[:80]
+                    if preview:
+                        parts.append(f'"{preview}"')
+                        if len(body.get("transcript_preview", "")) > 80:
+                            parts[-1] += "..."
+                return " ".join(parts) if parts else self.request.get("path", "")
+
+            # ── Voice-command entries ──
             ctx = body.get("context_type", "")
             transcript = body.get("transcript", "")
             has_audio = body.get("has_audio", False)
@@ -88,9 +110,11 @@ class LiveEntry:
     def to_summary(self) -> dict:
         resp_body = self.response.get("body", {})
         action = ""
+        mode = ""
         pipeline_status = ""
         if isinstance(resp_body, dict):
             action = resp_body.get("action", "")
+            mode = resp_body.get("mode", "")
         if self.pipeline_trace:
             pipeline_status = self.pipeline_trace.status
         return {
@@ -102,6 +126,7 @@ class LiveEntry:
             "duration_ms": round(self.duration_ms, 1),
             "summary": self._build_summary(),
             "action": action,
+            "mode": mode,
             "pipeline_status": pipeline_status,
         }
 
@@ -109,8 +134,10 @@ class LiveEntry:
         summary = self._build_summary()
         resp_body = self.response.get("body", {})
         action = ""
+        mode = ""
         if isinstance(resp_body, dict):
             action = resp_body.get("action", "")
+            mode = resp_body.get("mode", "")
         return {
             "id": self.id,
             "timestamp": self.timestamp,
@@ -118,6 +145,7 @@ class LiveEntry:
             "method": self.request.get("method", "POST"),
             "path": self.request.get("path", ""),
             "action": action,
+            "mode": mode,
             "request": {
                 "method": self.request.get("method", "POST"),
                 "path": self.request.get("path", ""),

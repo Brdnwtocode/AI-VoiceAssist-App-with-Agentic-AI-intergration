@@ -85,6 +85,27 @@ from .replay import store
 # Shared LLM Call Helper
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _extract_llm_meta(response, model_requested: str) -> dict:
+    """Extract model, token, and provider metadata from a litellm response."""
+    meta = {}
+    actual_model = getattr(response, "model", None) or model_requested
+    meta["model"] = actual_model
+    if "/" in actual_model:
+        meta["provider"] = actual_model.split("/")[0]
+    else:
+        meta["provider"] = "unknown"
+    usage = getattr(response, "usage", None)
+    if usage:
+        meta["prompt_tokens"] = getattr(usage, "prompt_tokens", 0) or 0
+        meta["completion_tokens"] = getattr(usage, "completion_tokens", 0) or 0
+        meta["total_tokens"] = getattr(usage, "total_tokens", 0) or 0
+    else:
+        meta["prompt_tokens"] = 0
+        meta["completion_tokens"] = 0
+        meta["total_tokens"] = 0
+    return meta
+
+
 async def _call_llm(
     node_name: str,
     system_prompt: str,
@@ -92,8 +113,8 @@ async def _call_llm(
     model: str = None,
     temperature: float = 0.1,
     timeout: float = None,
-) -> str:
-    """Shared litellm call wrapper for graph nodes."""
+):
+    """Shared litellm call wrapper for graph nodes. Returns (content_str, llm_metadata_dict)."""
     model = model or EXPERT_MODEL
     timeout = timeout or EXPERT_TIMEOUT
 
@@ -109,7 +130,9 @@ async def _call_llm(
             temperature=temperature,
             timeout=timeout,
         )
-        return (response.choices[0].message.content or "").strip()
+        content = (response.choices[0].message.content or "").strip()
+        meta = _extract_llm_meta(response, model)
+        return content, meta
     except Exception as exc:
         logger.exception("%s node: LLM call failed for model %s", node_name, model)
         raise
@@ -165,7 +188,7 @@ async def safety_gate_node(state: AgentState) -> Dict[str, Any]:
     logger.info("[SafetyGate] Checking transcript (len=%d)", len(transcript))
 
     try:
-        raw = await _call_llm(
+        raw, llm_meta = await _call_llm(
             "SafetyGate",
             system,
             "Classify the wrapped transcript.",
@@ -182,9 +205,16 @@ async def safety_gate_node(state: AgentState) -> Dict[str, Any]:
 
         elapsed = (time.perf_counter() - t0) * 1000
         if req_id:
+            stage_data = {"safe": verdict.safe, "reason": verdict.reason[:200]}
+            if llm_meta:
+                stage_data["model"] = llm_meta.get("model", "?")
+                stage_data["provider"] = llm_meta.get("provider", "?")
+                stage_data["prompt_tokens"] = llm_meta.get("prompt_tokens", 0)
+                stage_data["completion_tokens"] = llm_meta.get("completion_tokens", 0)
+                stage_data["total_tokens"] = llm_meta.get("total_tokens", 0)
             store.add_pipeline_stage(req_id, "safety_gate",
                 "passed" if verdict.safe else "blocked",
-                {"safe": verdict.safe, "reason": verdict.reason[:200]},
+                stage_data,
                 elapsed)
 
         return {
@@ -456,7 +486,7 @@ async def contrarian_expert_node(state: AgentState) -> Dict[str, Any]:
 
         # LLM call
         user_msg = reasoning_template + f'\n\nOutput JSON for: "{transcript}"'
-        raw = await _call_llm("Contrarian", CONTRARIAN_SYSTEM, user_msg)
+        raw, llm_meta = await _call_llm("Contrarian", CONTRARIAN_SYSTEM, user_msg)
         data = clean_json_output(raw)
 
         output = ContrarianOutput(
@@ -468,8 +498,14 @@ async def contrarian_expert_node(state: AgentState) -> Dict[str, Any]:
         elapsed = (time.perf_counter() - t0) * 1000
         logger.info("[Contrarian] Risk=%s critique_len=%d (%.0fms)", output.risk, len(output.critique), elapsed)
         if req_id:
-            store.add_pipeline_stage(req_id, "contrarian_expert", "passed",
-                {"risk": output.risk, "critique": output.critique[:200], "plan_aware": plan is not None}, elapsed)
+            stage_data = {"risk": output.risk, "critique": output.critique[:200], "plan_aware": plan is not None}
+            if llm_meta:
+                stage_data["model"] = llm_meta.get("model", "?")
+                stage_data["provider"] = llm_meta.get("provider", "?")
+                stage_data["prompt_tokens"] = llm_meta.get("prompt_tokens", 0)
+                stage_data["completion_tokens"] = llm_meta.get("completion_tokens", 0)
+                stage_data["total_tokens"] = llm_meta.get("total_tokens", 0)
+            store.add_pipeline_stage(req_id, "contrarian_expert", "passed", stage_data, elapsed)
         return {
             "contrarian_output": output,
             "contrarian_reasoning": reasoning,
@@ -590,7 +626,7 @@ async def research_expert_node(state: AgentState) -> Dict[str, Any]:
 
         # LLM call
         user_msg = reasoning_template + f'\n\nOutput JSON for: "{transcript}"'
-        raw = await _call_llm("Research", RESEARCH_SYSTEM, user_msg)
+        raw, llm_meta = await _call_llm("Research", RESEARCH_SYSTEM, user_msg)
         data = clean_json_output(raw)
         conf = float(data.get("confidence", 0.5))
         reasoning.confidence_rationale = (
@@ -619,10 +655,16 @@ async def research_expert_node(state: AgentState) -> Dict[str, Any]:
             conf, len(output.data_gaps), len(findings), elapsed,
         )
         if req_id:
-            store.add_pipeline_stage(req_id, "research_expert", "passed",
-                {"confidence": conf, "data_gaps": output.data_gaps[:5],
+            stage_data = {"confidence": conf, "data_gaps": output.data_gaps[:5],
                  "web_search": web_performed, "web_results": web_count,
-                 "findings_len": len(findings)}, elapsed)
+                 "findings_len": len(findings)}
+            if llm_meta:
+                stage_data["model"] = llm_meta.get("model", "?")
+                stage_data["provider"] = llm_meta.get("provider", "?")
+                stage_data["prompt_tokens"] = llm_meta.get("prompt_tokens", 0)
+                stage_data["completion_tokens"] = llm_meta.get("completion_tokens", 0)
+                stage_data["total_tokens"] = llm_meta.get("total_tokens", 0)
+            store.add_pipeline_stage(req_id, "research_expert", "passed", stage_data, elapsed)
         return {
             "research_output": output,
             "research_reasoning": reasoning,
@@ -725,7 +767,7 @@ async def conversation_expert_node(state: AgentState) -> Dict[str, Any]:
 
         # LLM call
         user_msg = analysis_template + "\n\nOutput JSON."
-        raw = await _call_llm("Conversation", CONVERSATION_SYSTEM, user_msg)
+        raw, llm_meta = await _call_llm("Conversation", CONVERSATION_SYSTEM, user_msg)
         data = clean_json_output(raw)
         intent = data.get("intent", transcript)
         reasoning.intent_rationale = (
@@ -746,10 +788,16 @@ async def conversation_expert_node(state: AgentState) -> Dict[str, Any]:
             output.language, output.tone, output.has_ambiguity, elapsed,
         )
         if req_id:
-            store.add_pipeline_stage(req_id, "conversation_expert", "passed",
-                {"language": output.language, "tone": output.tone,
+            stage_data = {"language": output.language, "tone": output.tone,
                  "intent": output.intent[:200], "has_ambiguity": output.has_ambiguity,
-                 "plan_aware": plan is not None}, elapsed)
+                 "plan_aware": plan is not None}
+            if llm_meta:
+                stage_data["model"] = llm_meta.get("model", "?")
+                stage_data["provider"] = llm_meta.get("provider", "?")
+                stage_data["prompt_tokens"] = llm_meta.get("prompt_tokens", 0)
+                stage_data["completion_tokens"] = llm_meta.get("completion_tokens", 0)
+                stage_data["total_tokens"] = llm_meta.get("total_tokens", 0)
+            store.add_pipeline_stage(req_id, "conversation_expert", "passed", stage_data, elapsed)
         return {
             "conversation_output": output,
             "conversation_reasoning": reasoning,
@@ -1143,6 +1191,15 @@ IMPORTANT: Address ALL issues listed above. Do NOT repeat the same mistakes.
 
     raw = (response.choices[0].message.content or "").strip()
 
+    # Extract LLM metadata from the successful response
+    actual_model = getattr(response, "model", None) or RESOLVER_PRIMARY
+    resolver_meta = {"model": actual_model, "provider": actual_model.split("/")[0] if "/" in actual_model else "unknown"}
+    usage = getattr(response, "usage", None)
+    if usage:
+        resolver_meta["prompt_tokens"] = getattr(usage, "prompt_tokens", 0) or 0
+        resolver_meta["completion_tokens"] = getattr(usage, "completion_tokens", 0) or 0
+        resolver_meta["total_tokens"] = getattr(usage, "total_tokens", 0) or 0
+
     try:
         parsed = clean_json_output(raw)
         out = ResolverLLMOutput.model_validate(parsed)
@@ -1180,8 +1237,9 @@ IMPORTANT: Address ALL issues listed above. Do NOT repeat the same mistakes.
         logger.warning("[Resolver] Output validation failed: %s (action=%s)", detail, action)
         elapsed = (time.perf_counter() - t0) * 1000
         if req_id:
-            store.add_pipeline_stage(req_id, "resolver", "failed",
-                {"error": f"validation: {detail}"[:200], "action": action}, elapsed)
+            stage_data = {"error": f"validation: {detail}"[:200], "action": action}
+            stage_data.update(resolver_meta)
+            store.add_pipeline_stage(req_id, "resolver", "failed", stage_data, elapsed)
         return {
             "nlu_result": {"action": "none", "params": {}, "reply": None},
             "nlu_raw_response": raw[:500],
@@ -1198,9 +1256,10 @@ IMPORTANT: Address ALL issues listed above. Do NOT repeat the same mistakes.
     elapsed = (time.perf_counter() - t0) * 1000
     if req_id:
         stage_name = f"resolver_r{new_refinement_count}" if new_refinement_count > 0 else "resolver"
-        store.add_pipeline_stage(req_id, stage_name, "passed",
-            {"action": action_validated["action"], "has_reply": bool(action_validated.get("reply")),
-             "refinement": new_refinement_count}, elapsed)
+        stage_data = {"action": action_validated["action"], "has_reply": bool(action_validated.get("reply")),
+             "refinement": new_refinement_count}
+        stage_data.update(resolver_meta)
+        store.add_pipeline_stage(req_id, stage_name, "passed", stage_data, elapsed)
 
     return {
         "nlu_result": action_validated,
@@ -1412,7 +1471,7 @@ async def planner_node(state: AgentState) -> Dict[str, Any]:
 
         # LLM call
         user_msg = planning_template + f'\n\nCreate execution plan for: "{transcript}"'
-        raw = await _call_llm("Planner", PLANNER_SYSTEM, user_msg)
+        raw, llm_meta = await _call_llm("Planner", PLANNER_SYSTEM, user_msg)
         data = clean_json_output(raw)
 
         from .models import ExecutionPlan, PlanStep
@@ -1441,8 +1500,14 @@ async def planner_node(state: AgentState) -> Dict[str, Any]:
         logger.info("[Planner] Plan: %d steps, multi_step=%s", len(steps), plan.is_multi_step)
         elapsed = (time.perf_counter() - t0) * 1000
         if req_id:
-            store.add_pipeline_stage(req_id, "planner", "passed",
-                {"steps": len(steps), "multi_step": plan.is_multi_step}, elapsed)
+            stage_data = {"steps": len(steps), "multi_step": plan.is_multi_step}
+            if llm_meta:
+                stage_data["model"] = llm_meta.get("model", "?")
+                stage_data["provider"] = llm_meta.get("provider", "?")
+                stage_data["prompt_tokens"] = llm_meta.get("prompt_tokens", 0)
+                stage_data["completion_tokens"] = llm_meta.get("completion_tokens", 0)
+                stage_data["total_tokens"] = llm_meta.get("total_tokens", 0)
+            store.add_pipeline_stage(req_id, "planner", "passed", stage_data, elapsed)
         return {
             "execution_plan": plan,
             "messages": [{"node": "planner", "steps": len(steps), "multi_step": plan.is_multi_step}],
@@ -1607,7 +1672,7 @@ async def reflection_node(state: AgentState) -> Dict[str, Any]:
     # ── LLM call for reflection ──
     try:
         user_msg = reflection_template + "\n\nEvaluate the resolver output."
-        raw = await _call_llm("Reflection", REFLECTION_SYSTEM, user_msg)
+        raw, llm_meta = await _call_llm("Reflection", REFLECTION_SYSTEM, user_msg)
         data = clean_json_output(raw)
 
         from .models import ReflectionOutput, ReflectionReasoning
@@ -1655,9 +1720,15 @@ async def reflection_node(state: AgentState) -> Dict[str, Any]:
 
         elapsed = (time.perf_counter() - t0) * 1000
         if req_id:
-            store.add_pipeline_stage(req_id, "reflection", "passed",
-                {"score": score, "needs_refinement": needs_refinement,
-                 "issues_count": len(issues)}, elapsed)
+            stage_data = {"score": score, "needs_refinement": needs_refinement,
+                 "issues_count": len(issues)}
+            if llm_meta:
+                stage_data["model"] = llm_meta.get("model", "?")
+                stage_data["provider"] = llm_meta.get("provider", "?")
+                stage_data["prompt_tokens"] = llm_meta.get("prompt_tokens", 0)
+                stage_data["completion_tokens"] = llm_meta.get("completion_tokens", 0)
+                stage_data["total_tokens"] = llm_meta.get("total_tokens", 0)
+            store.add_pipeline_stage(req_id, "reflection", "passed", stage_data, elapsed)
 
         return {
             "reflection_output": reflection,

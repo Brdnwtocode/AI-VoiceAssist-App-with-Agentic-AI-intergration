@@ -305,6 +305,213 @@ body {
 .stage-detail-item .stage-data { color: #8b949e; font-size: .75rem; flex: 1; }
 .stage-detail-item .stage-dur { color: #8b949e; font-family: 'Courier New',monospace; font-size: .72rem; }
 
+/* ── Data Flow Visualization ── */
+.data-flow-section {
+    margin-bottom: 20px;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #0d1117;
+}
+.data-flow-section .flow-header {
+    background: #161b22;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #30363d;
+    font-weight: 600;
+    font-size: .85rem;
+    color: #e1e4e8;
+    cursor: pointer;
+    user-select: none;
+}
+.data-flow-section .flow-header:hover { background: #1c2333; }
+.data-flow-section .flow-header .arrow { color: #8b949e; transition: transform .2s; font-size: .75rem; }
+.data-flow-section .flow-header .arrow.open { transform: rotate(90deg); }
+.data-flow-body { padding: 8px 0; }
+.data-flow-body.collapsed { display: none; }
+
+.flow-step {
+    padding: 8px 16px;
+    border-bottom: 1px solid #1c2128;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: .78rem;
+    position: relative;
+}
+.flow-step:last-child { border-bottom: none; }
+.flow-step .flow-step-num {
+    min-width: 26px; height: 26px;
+    border-radius: 50%;
+    background: #21262d;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .7rem; font-weight: 700; color: #8b949e;
+    flex-shrink: 0;
+}
+.flow-step .flow-step-num.passed { background: #1b3d1f; color: #7ee787; }
+.flow-step .flow-step-num.failed { background: #3d1f1f; color: #f87171; }
+.flow-step .flow-step-num.skipped { background: #1f2d3d; color: #8b949e; }
+.flow-step .flow-step-info { flex: 1; min-width: 0; }
+.flow-step .flow-step-name { font-weight: 600; color: #e1e4e8; margin-bottom: 2px; }
+.flow-step .flow-step-io {
+    display: flex; gap: 12px; margin-top: 4px; flex-wrap: wrap;
+}
+.flow-step .flow-io-label {
+    font-size: .65rem; color: #484f58; text-transform: uppercase; letter-spacing: .5px;
+}
+.flow-step .flow-io-value {
+    font-size: .72rem; color: #8b949e; font-family: 'Courier New',monospace;
+    word-break: break-all; max-width: 300px; line-height: 1.3;
+}
+.flow-step .flow-io-value.highlight { color: #a5d6ff; }
+.flow-step .flow-step-dur {
+    font-size: .68rem; color: #484f58; font-family: 'Courier New',monospace;
+    flex-shrink: 0; min-width: 55px; text-align: right;
+}
+.flow-arrow {
+    text-align: center; color: #30363d; font-size: .9rem;
+    padding: 2px 0;
+}
+.flow-arrow.active { color: #58a6ff; }
+
+.stage-input-badge {
+    display: inline-block; font-size: .6rem; padding: 1px 5px; border-radius: 3px;
+    background: #1f2d3d; color: #79c0ff; margin-right: 4px;
+}
+.stage-output-badge {
+    display: inline-block; font-size: .6rem; padding: 1px 5px; border-radius: 3px;
+    background: #1b3d1f; color: #7ee787; margin-right: 4px;
+}
+
+/* ── Model / Token / Provider badges ── */
+.model-badge {
+    display: inline-block; font-size: .6rem; padding: 1px 5px; border-radius: 3px;
+    background: #2d1f3d; color: #d2a8ff; margin-right: 4px; font-weight: 600;
+}
+.provider-badge {
+    display: inline-block; font-size: .6rem; padding: 1px 5px; border-radius: 3px;
+    background: #1f2d2d; color: #a5d6ff; margin-right: 4px;
+}
+.token-badge {
+    display: inline-block; font-size: .6rem; padding: 1px 5px; border-radius: 3px;
+    background: #21262d; color: #ffa657; margin-right: 4px; font-family: 'Courier New',monospace;
+}
+.token-badge.in { color: #79c0ff; }
+.token-badge.out { color: #7ee787; }
+.token-badge.total { color: #ffa657; }
+
+/* ── LLM Usage Summary Section ── */
+.llm-summary {
+    margin-bottom: 20px;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #0d1117;
+}
+.llm-summary .llm-header {
+    background: #161b22;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #30363d;
+    font-weight: 600;
+    font-size: .85rem;
+    color: #e1e4e8;
+    cursor: pointer;
+    user-select: none;
+}
+.llm-summary .llm-header:hover { background: #1c2333; }
+.llm-summary .llm-header .arrow { color: #8b949e; transition: transform .2s; font-size: .75rem; }
+.llm-summary .llm-header .arrow.open { transform: rotate(90deg); }
+.llm-summary .llm-body { padding: 12px 16px; }
+.llm-summary .llm-body.collapsed { display: none; }
+
+.llm-row {
+    display: flex; align-items: center; gap: 10px; padding: 6px 0;
+    border-bottom: 1px solid #1c2128; font-size: .78rem;
+}
+.llm-row:last-child { border-bottom: none; }
+.llm-row .llm-stage { min-width: 140px; color: #e1e4e8; font-weight: 500; flex-shrink: 0; }
+.llm-row .llm-model { color: #d2a8ff; font-size: .72rem; font-family: 'Courier New',monospace; flex: 1; }
+.llm-row .llm-provider { color: #a5d6ff; font-size: .68rem; min-width: 70px; }
+.llm-row .llm-tokens { color: #ffa657; font-size: .7rem; font-family: 'Courier New',monospace; min-width: 100px; text-align: right; }
+.llm-row .llm-tokens .in { color: #79c0ff; }
+.llm-row .llm-tokens .out { color: #7ee787; }
+
+.llm-totals {
+    margin-top: 10px; padding-top: 8px; border-top: 2px solid #30363d;
+    display: flex; gap: 20px; flex-wrap: wrap; font-size: .8rem;
+}
+.llm-totals .total-item { display: flex; align-items: center; gap: 6px; }
+.llm-totals .total-label { color: #8b949e; }
+.llm-totals .total-value { color: #e1e4e8; font-weight: 600; font-family: 'Courier New',monospace; }
+
+/* ── Tab Bar ── */
+.tab-bar {
+    background: #0d1117;
+    border-bottom: 1px solid #30363d;
+    display: flex; align-items: stretch;
+    flex-shrink: 0; overflow-x: auto; min-height: 36px;
+}
+.tab-bar::-webkit-scrollbar { height: 4px; }
+.tab-bar::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+.tab-item {
+    padding: 6px 12px; font-size: .75rem; color: #8b949e;
+    border-right: 1px solid #21262d; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    white-space: nowrap; user-select: none;
+    background: #0d1117; transition: background .15s;
+    flex-shrink: 0; min-width: 0;
+}
+.tab-item:hover { background: #161b22; color: #e1e4e8; }
+.tab-item.active { background: #161b22; color: #e1e4e8; border-bottom: 2px solid #58a6ff; }
+.tab-item .tab-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.tab-item .tab-close {
+    font-size: .85rem; color: #484f58; cursor: pointer; line-height: 1;
+    padding: 0 2px; border-radius: 3px;
+}
+.tab-item .tab-close:hover { color: #f85149; background: #3d1f1f; }
+.tab-item .tab-badge {
+    font-size: .6rem; padding: 1px 5px; border-radius: 8px;
+    background: #21262d; color: #8b949e;
+}
+.tab-item .tab-badge.live { background: #1b3d1f; color: #7ee787; }
+.tab-item .tab-badge.imported { background: #2d1f3d; color: #d2a8ff; }
+.tab-add {
+    padding: 6px 14px; font-size: .85rem; color: #8b949e; cursor: pointer;
+    display: flex; align-items: center; border-right: 1px solid #21262d;
+    background: #0d1117; flex-shrink: 0;
+}
+.tab-add:hover { background: #161b22; color: #58a6ff; }
+.tab-import {
+    padding: 6px 12px; font-size: .75rem; color: #8b949e; cursor: pointer;
+    display: flex; align-items: center; gap: 4px;
+    background: #0d1117; flex-shrink: 0; margin-left: auto;
+}
+.tab-import:hover { color: #d2a8ff; }
+.tab-rename-input {
+    background: #0d1117; border: 1px solid #58a6ff; border-radius: 3px;
+    color: #e1e4e8; font-size: .75rem; padding: 2px 6px; outline: none;
+    max-width: 130px;
+}
+
+/* ── Export/Import Buttons ── */
+.export-btn-group {
+    display: flex; gap: 4px; margin-left: 8px;
+}
+.export-btn-group button {
+    background: #1f2d3d; border: 1px solid #30363d; border-radius: 4px;
+    padding: 3px 10px; color: #79c0ff; font-size: .7rem; cursor: pointer;
+}
+.export-btn-group button:hover { background: #30363d; }
+.export-btn-group button.export-md { color: #d2a8ff; }
+.export-btn-group button.export-csv { color: #7ee787; }
+.export-btn-group button.export-txt { color: #ffa657; }
+.file-input-hidden { display: none; }
+
 @media (max-width: 800px) {
     .main { flex-direction: column; }
     .entry-list { width: 100%; min-width: 0; max-height: 35vh; border-right: none; border-bottom: 1px solid #30363d; }
@@ -316,7 +523,7 @@ body {
 <body>
 
 <div class="header">
-    <h1>🔬 Live Viewer — AI Voice Pipeline</h1>
+    <h1>🔬 Live Viewer — AI Voice & Records Pipeline</h1>
     <span class="connection-status" id="connStatus">connecting...</span>
     <span class="connection-status" id="pipeStatus" style="margin-left:4px">pipe: connecting...</span>
     <div class="stats">
@@ -329,7 +536,25 @@ body {
 <div class="toolbar">
     <input type="text" id="filterInput" placeholder="Filter by transcript, action, context..." oninput="renderList()">
     <label><input type="checkbox" id="autoScroll" checked> Auto-scroll</label>
-    <button onclick="clearAll()">Clear</button>
+    <button onclick="clearCurrentSession()">Clear</button>
+    <div class="export-btn-group">
+        <button class="export-md" onclick="exportSession('markdown')" title="Export as Markdown report">📝 .md</button>
+        <button class="export-csv" onclick="exportSession('csv')" title="Export as CSV table">📊 .csv</button>
+        <button class="export-txt" onclick="exportSession('txt')" title="Export as plain text">📄 .txt</button>
+    </div>
+    <input type="file" id="importFileInput" class="file-input-hidden" accept=".json" onchange="importSession(this)">
+    <button onclick="document.getElementById('importFileInput').click()" title="Import a saved session file">📥 Import</button>
+</div>
+
+<!-- ── Tab Bar ── -->
+<div class="tab-bar" id="tabBar">
+    <div class="tab-item active" data-tab="default" onclick="switchTab('default')">
+        <span class="tab-name">Main Session</span>
+        <span class="tab-badge live">live</span>
+        <span class="tab-close" onclick="event.stopPropagation();closeTab('default')" title="Close tab">✕</span>
+    </div>
+    <div class="tab-add" onclick="addNewTab()" title="New live tab">+ New Tab</div>
+    <div class="tab-import" onclick="document.getElementById('importFileInput').click()" title="Import saved session">📥 Import Session</div>
 </div>
 
 <div class="main">
@@ -346,12 +571,124 @@ body {
 </div>
 
 <script>
-// ── State ──
-const entries = [];
-const pipelineTraces = {};
-let selectedId = null;
+// ── Session-Based State ──
+const sessions = [];
+let activeSessionId = null;
 let eventSource = null;
 let pipelineSSE = null;
+let tabCounter = 0;
+
+function createSession(name, isLive, importedFrom) {
+    const id = 'sess_' + Date.now() + '_' + (tabCounter++);
+    const session = {
+        id: id,
+        name: name || ('Session ' + (sessions.length + 1)),
+        entries: [],
+        pipelineTraces: {},
+        createdAt: new Date().toISOString(),
+        isLive: !!isLive,
+        importedFrom: importedFrom || null,
+    };
+    sessions.push(session);
+    return session;
+}
+
+function getActiveSession() {
+    if (!activeSessionId && sessions.length === 0) {
+        createSession('Main Session', true);
+        activeSessionId = sessions[0].id;
+    }
+    if (!activeSessionId && sessions.length > 0) {
+        activeSessionId = sessions[0].id;
+    }
+    const s = sessions.find(s => s.id === activeSessionId);
+    if (!s && sessions.length > 0) {
+        activeSessionId = sessions[0].id;
+        return sessions[0];
+    }
+    return s || null;
+}
+
+// ── Tab Management ──
+function renderTabBar() {
+    const bar = document.getElementById('tabBar');
+    let html = '';
+    sessions.forEach(s => {
+        const isActive = s.id === activeSessionId;
+        let badgeHTML = '';
+        if (s.isLive) badgeHTML = '<span class="tab-badge live">live</span>';
+        else if (s.importedFrom) badgeHTML = '<span class="tab-badge imported">imported</span>';
+        html += '<div class="tab-item'+(isActive?' active':'')+'" data-tab="'+s.id+'" onclick="switchTab(\''+s.id+'\')" ondblclick="startRenameTab(\''+s.id+'\', this)" title="'+esc(s.name)+' (double-click to rename)">';
+        html += '<span class="tab-name" id="tabName_'+s.id+'">'+esc(s.name)+'</span>';
+        html += badgeHTML;
+        if (sessions.length > 1) {
+            html += '<span class="tab-close" onclick="event.stopPropagation();closeTab(\''+s.id+'\')" title="Close tab">✕</span>';
+        }
+        html += '</div>';
+    });
+    html += '<div class="tab-add" onclick="addNewTab()" title="New live tab">+ New Tab</div>';
+    html += '<div class="tab-import" onclick="document.getElementById(\'importFileInput\').click()" title="Import saved session">📥 Import Session</div>';
+    bar.innerHTML = html;
+}
+
+function switchTab(sessionId) {
+    if (activeSessionId === sessionId) return;
+    // Save current filter/selection state (not needed, just switch)
+    activeSessionId = sessionId;
+    const s = getActiveSession();
+    if (!s) return;
+    renderTabBar();
+    updateStats();
+    renderList(false);
+    // Clear detail panel
+    document.getElementById('detailPanel').innerHTML = '<div class="detail-empty"><div style="font-size:3rem">🔍</div><div>Select a request to inspect</div><div style="font-size:.75rem;color:#484f58">Shows AI pipeline stages, request/response data packages</div></div>';
+}
+
+function addNewTab() {
+    const s = createSession('Session ' + (sessions.length + 1), true);
+    activeSessionId = s.id;
+    renderTabBar();
+    updateStats();
+    renderList(false);
+    document.getElementById('detailPanel').innerHTML = '<div class="detail-empty"><div style="font-size:3rem">🔍</div><div>New session started — waiting for requests...</div></div>';
+}
+
+function closeTab(sessionId) {
+    if (sessions.length <= 1) return; // Keep at least one tab
+    const idx = sessions.findIndex(s => s.id === sessionId);
+    if (idx < 0) return;
+    sessions.splice(idx, 1);
+    if (activeSessionId === sessionId) {
+        activeSessionId = sessions[Math.min(idx, sessions.length - 1)].id;
+    }
+    renderTabBar();
+    updateStats();
+    renderList(false);
+    document.getElementById('detailPanel').innerHTML = '<div class="detail-empty"><div style="font-size:3rem">🔍</div><div>Select a request to inspect</div></div>';
+}
+
+function startRenameTab(sessionId, tabEl) {
+    const s = sessions.find(s => s.id === sessionId);
+    if (!s) return;
+    const nameSpan = tabEl.querySelector('.tab-name');
+    if (!nameSpan) return;
+    const currentName = s.name;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tab-rename-input';
+    input.value = currentName;
+    input.onblur = () => finishRename(sessionId, input.value, nameSpan);
+    input.onkeydown = (e) => { if (e.key === 'Enter') finishRename(sessionId, input.value, nameSpan); if (e.key === 'Escape') finishRename(sessionId, currentName, nameSpan); };
+    nameSpan.replaceWith(input);
+    input.focus();
+    input.select();
+}
+
+function finishRename(sessionId, newName, nameSpan) {
+    const s = sessions.find(s => s.id === sessionId);
+    if (s && newName.trim()) s.name = newName.trim();
+    renderTabBar();
+}
 
 // ── SSE Connections ──
 function connectSSE() {
@@ -362,10 +699,14 @@ function connectSSE() {
     eventSource.onmessage = e => {
         try {
             const entry = JSON.parse(e.data);
-            if (entry.pipeline_trace) {
-                pipelineTraces[entry.pipeline_trace.id || entry.id] = entry.pipeline_trace;
-            }
-            entries.push(entry);
+            // Push to ALL live sessions
+            sessions.forEach(s => {
+                if (!s.isLive) return;
+                if (entry.pipeline_trace) {
+                    s.pipelineTraces[entry.pipeline_trace.id || entry.id] = entry.pipeline_trace;
+                }
+                s.entries.push(entry);
+            });
             updateStats();
             renderList(!!document.getElementById('autoScroll').checked);
         } catch(err) { console.error('SSE parse error:', err); }
@@ -384,20 +725,26 @@ function connectPipelineSSE() {
     pipelineSSE.onmessage = e => {
         try {
             const event = JSON.parse(e.data);
-            if (event.type === 'pipeline_start' && event.trace) {
-                pipelineTraces[event.trace.id] = event.trace;
-            } else if (event.type === 'pipeline_end' && event.trace) {
-                pipelineTraces[event.trace.id] = event.trace;
-                document.getElementById('traceCount').textContent = Object.keys(pipelineTraces).length;
-                if (selectedId) refreshDetail();
-            } else if (event.type === 'pipeline_stage') {
-                const tid = event.request_id;
-                if (!pipelineTraces[tid]) {
-                    pipelineTraces[tid] = { id: tid, stages: [], status: 'running', transcript: '', context_type: '' };
+            // Push to ALL live sessions
+            sessions.forEach(s => {
+                if (!s.isLive) return;
+                if (event.type === 'pipeline_start' && event.trace) {
+                    s.pipelineTraces[event.trace.id] = event.trace;
+                } else if (event.type === 'pipeline_end' && event.trace) {
+                    s.pipelineTraces[event.trace.id] = event.trace;
+                    if (s.id === activeSessionId) {
+                        document.getElementById('traceCount').textContent = Object.keys(s.pipelineTraces).length;
+                        if (getSelectedId()) refreshDetail();
+                    }
+                } else if (event.type === 'pipeline_stage') {
+                    const tid = event.request_id;
+                    if (!s.pipelineTraces[tid]) {
+                        s.pipelineTraces[tid] = { id: tid, stages: [], status: 'running', transcript: '', context_type: '' };
+                    }
+                    s.pipelineTraces[tid].stages.push(event.stage);
+                    if (s.id === activeSessionId && getSelectedId()) refreshDetail();
                 }
-                pipelineTraces[tid].stages.push(event.stage);
-                if (selectedId) refreshDetail();
-            }
+            });
         } catch(err) { console.error('Pipeline SSE error:', err); }
     };
     pipelineSSE.onerror = () => {
@@ -407,9 +754,23 @@ function connectPipelineSSE() {
 }
 
 function updateStats() {
-    document.getElementById('entryCount').textContent = entries.length;
-    document.getElementById('traceCount').textContent = Object.keys(pipelineTraces).length;
-    if (entries.length > 0) document.getElementById('lastEntry').textContent = entries[entries.length-1].timestamp;
+    const s = getActiveSession();
+    const eCount = s ? s.entries.length : 0;
+    const tCount = s ? Object.keys(s.pipelineTraces).length : 0;
+    document.getElementById('entryCount').textContent = eCount;
+    document.getElementById('traceCount').textContent = tCount;
+    if (s && s.entries.length > 0) document.getElementById('lastEntry').textContent = s.entries[s.entries.length-1].timestamp;
+    else document.getElementById('lastEntry').textContent = '—';
+}
+
+// ── Session-scoped selected entry ID ──
+function getSelectedId() {
+    const s = getActiveSession();
+    return s ? s._selectedId || null : null;
+}
+function setSelectedId(id) {
+    const s = getActiveSession();
+    if (s) s._selectedId = id;
 }
 
 // ── Rendering ──
@@ -417,13 +778,18 @@ function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
 
 function renderList(scroll) {
     const container = document.getElementById('entryList');
+    const s = getActiveSession();
+    const entries = s ? s.entries : [];
+    const pipelineTraces = s ? s.pipelineTraces : {};
     const filter = (document.getElementById('filterInput').value || '').toLowerCase();
     const filtered = filter
         ? entries.filter(e => {
-            const s = (e.summary||'').toLowerCase();
+            const sm = (e.summary||'').toLowerCase();
             const a = (e.action||'').toLowerCase();
             const ps = (e.pipeline_status||'').toLowerCase();
-            return s.includes(filter) || String(e.status_code).includes(filter) || a.includes(filter) || ps.includes(filter);
+            const m = (e.mode||'').toLowerCase();
+            const path = (e.path||'').toLowerCase();
+            return sm.includes(filter) || String(e.status_code).includes(filter) || a.includes(filter) || ps.includes(filter) || m.includes(filter) || path.includes(filter);
         })
         : entries;
     if (filtered.length === 0) {
@@ -432,16 +798,19 @@ function renderList(scroll) {
             : '<div class="empty-state"><div class="icon">&#9744;</div><div>No entries match filter</div></div>';
         return;
     }
+    const selId = getSelectedId();
     let html = '';
     for (const entry of filtered) {
         const sc = entry.status_code < 300 ? 'ok' : (entry.status_code < 400 ? 'redirect' : 'err');
-        const act = entry.id === selectedId ? ' active' : '';
-        const s = entry.summary || '';
+        const act = entry.id === selId ? ' active' : '';
+        const st = entry.summary || '';
         const action = entry.action || '';
         const ps = entry.pipeline_status || '';
         const psClass = ps === 'completed' ? 'completed' : (ps === 'blocked' ? 'blocked' : (ps === 'error' ? 'error' : ''));
+        const mode = entry.mode || '';
+        const isRecords = mode === 'automate';
 
-        let sh = esc(s)
+        let sh = esc(st)
             .replace(/\[([^\]]+)\]/g,'<span style="color:#d2a8ff">[$1]</span>')
             .replace(/\(audio\)/g,'<span style="color:#7ee787">(audio)</span>')
             .replace(/"([^"]+)"/g,'<span style="color:#a5d6ff">"$1"</span>');
@@ -451,6 +820,7 @@ function renderList(scroll) {
         html += '<span class="time">'+(entry.timestamp||'')+'</span>';
         html += '<span class="method">'+(entry.method||'POST')+'</span>';
         html += '<span class="status '+sc+'">'+entry.status_code+'</span>';
+        if (isRecords) html += '<span class="action-tag" style="background:#1f2d3d;color:#79c0ff">records</span>';
         if (action) html += '<span class="action-tag">'+esc(action)+'</span>';
         html += '<span class="duration">'+entry.duration_ms+'ms</span>';
         html += '</div>';
@@ -460,20 +830,354 @@ function renderList(scroll) {
     }
     container.innerHTML = html;
     if (scroll) { container.scrollTop = container.scrollHeight; }
-    else if (selectedId) { const el = container.querySelector('.active'); if (el) el.scrollIntoView({block:'nearest'}); }
+    else if (selId) { const el = container.querySelector('.active'); if (el) el.scrollIntoView({block:'nearest'}); }
 }
 
 function selectEntry(id) {
-    selectedId = id;
+    setSelectedId(id);
     renderList(false);
-    const entry = entries.find(e => e.id === id);
+    const s = getActiveSession();
+    if (!s) return;
+    const entry = s.entries.find(e => e.id === id);
     if (entry) renderDetail(entry);
 }
 
 function refreshDetail() {
-    if (!selectedId) return;
-    const entry = entries.find(e => e.id === selectedId);
+    const selId = getSelectedId();
+    if (!selId) return;
+    const s = getActiveSession();
+    if (!s) return;
+    const entry = s.entries.find(e => e.id === selId);
     if (entry) renderDetail(entry);
+}
+
+function clearCurrentSession() {
+    const s = getActiveSession();
+    if (!s) return;
+    s.entries.length = 0;
+    for (const k in s.pipelineTraces) delete s.pipelineTraces[k];
+    s._selectedId = null;
+    document.getElementById('entryList').innerHTML = '<div class="empty-state"><div class="icon">&#9678;</div><div>Session cleared — waiting for requests...</div></div>';
+    document.getElementById('detailPanel').innerHTML = '<div class="detail-empty"><div style="font-size:3rem">🔍</div><div>Select a request to inspect</div></div>';
+    updateStats();
+}
+
+async function loadExisting() {
+    // Only load into the first live session
+    if (sessions.length === 0) createSession('Main Session', true);
+    const s = sessions[0];
+    activeSessionId = s.id;
+
+    try {
+        const resp = await fetch('/api/live-viewer/entries');
+        const data = await resp.json();
+        for (const summ of data) {
+            const dr = await fetch('/api/live-viewer/entries/'+summ.id);
+            if (dr.ok) {
+                const full = await dr.json();
+                if (!s.entries.find(e => e.id === full.id)) {
+                    s.entries.push(full);
+                    if (full.pipeline_trace) {
+                        s.pipelineTraces[full.pipeline_trace.id || full.id] = full.pipeline_trace;
+                    }
+                }
+            }
+        }
+        updateStats(); renderList(true);
+    } catch(err) { console.error('loadExisting:', err); }
+
+    try {
+        const tr = await fetch('/api/live-viewer/pipeline/traces');
+        const traces = await tr.json();
+        for (const t of traces) {
+            if (!s.pipelineTraces[t.id]) s.pipelineTraces[t.id] = t;
+        }
+        document.getElementById('traceCount').textContent = Object.keys(s.pipelineTraces).length;
+    } catch(err) { console.error('loadTraces:', err); }
+
+    renderTabBar();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Export (Markdown / CSV / TXT)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function exportSession(format) {
+    const s = getActiveSession();
+    if (!s || s.entries.length === 0) { alert('No entries to export in current tab.'); return; }
+
+    let content = '';
+    let filename = '';
+    let mime = '';
+
+    if (format === 'markdown') {
+        content = buildMarkdownExport(s);
+        filename = (s.name||'session').replace(/[^a-zA-Z0-9_-]/g,'_') + '.md';
+        mime = 'text/markdown';
+    } else if (format === 'csv') {
+        content = buildCSVExport(s);
+        filename = (s.name||'session').replace(/[^a-zA-Z0-9_-]/g,'_') + '.csv';
+        mime = 'text/csv';
+    } else if (format === 'txt') {
+        content = buildTXTExport(s);
+        filename = (s.name||'session').replace(/[^a-zA-Z0-9_-]/g,'_') + '.txt';
+        mime = 'text/plain';
+    }
+
+    const blob = new Blob(['\uFEFF' + content], { type: mime + ';charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function buildMarkdownExport(s) {
+    const now = new Date().toISOString().replace('T',' ').substring(0,19);
+    let md = '# ' + (s.name||'Session') + '\n\n';
+    md += '**Exported:** ' + now + '  \n';
+    md += '**Entries:** ' + s.entries.length + '  \n';
+    md += '**Pipeline Traces:** ' + Object.keys(s.pipelineTraces).length + '  \n';
+    if (s.importedFrom) md += '**Imported from:** ' + s.importedFrom + '  \n';
+    md += '\n---\n\n';
+
+    // Summary table
+    md += '## 📊 Request Summary\n\n';
+    md += '| # | Time | Method | Status | Duration | Action | Mode | Pipeline | Summary |\n';
+    md += '|---|------|--------|--------|----------|--------|------|----------|--------|\n';
+    s.entries.forEach((e, i) => {
+        md += '| ' + (i+1) + ' | ' + (e.timestamp||'') + ' | ' + (e.method||'POST') + ' | ' + e.status_code + ' | ' + (e.duration_ms||0) + 'ms | ' + (e.action||'') + ' | ' + (e.mode||'') + ' | ' + (e.pipeline_status||'') + ' | ' + ((e.summary||'').substring(0,80).replace(/\|/g,'\\|')) + ' |\n';
+    });
+    md += '\n---\n\n';
+
+    // Pipeline traces
+    md += '## 🔬 Pipeline Traces\n\n';
+    const traceIds = Object.keys(s.pipelineTraces);
+    if (traceIds.length === 0) {
+        md += '*No pipeline traces recorded.*\n\n';
+    } else {
+        traceIds.forEach(tid => {
+            const t = s.pipelineTraces[tid];
+            md += '### Trace `' + tid.substring(0,12) + '...`\n\n';
+            md += '- **Status:** ' + (t.status||'?') + '\n';
+            md += '- **Context:** ' + (t.context_type||'?') + '\n';
+            md += '- **Duration:** ' + (t.total_duration_ms||'?') + 'ms\n';
+            md += '- **Transcript:** ' + ((t.transcript||'').substring(0,100)) + '\n\n';
+
+            if (t.stages && t.stages.length > 0) {
+                md += '| Stage | Status | Duration | Model | Tokens | Key Data |\n';
+                md += '|-------|--------|----------|-------|--------|----------|\n';
+                t.stages.forEach(st => {
+                    const d = st.data || {};
+                    const modelStr = d.model ? d.model.substring(0,40) : '';
+                    const tokenStr = d.total_tokens ? (d.prompt_tokens||0)+'+'+(d.completion_tokens||0)+'='+d.total_tokens : '';
+                    const keyData = [];
+                    if (d.safe !== undefined) keyData.push('safe='+d.safe);
+                    if (d.complexity) keyData.push(d.complexity);
+                    if (d.risk) keyData.push('risk='+d.risk);
+                    if (d.confidence !== undefined) keyData.push('conf='+Math.round(d.confidence*100)+'%');
+                    if (d.action) keyData.push(d.action);
+                    if (d.score !== undefined) keyData.push('score='+Math.round(d.score*100)+'%');
+                    if (d.has_summary) keyData.push('summary=✓');
+                    if (d.task_count) keyData.push('tasks='+d.task_count);
+                    if (d.has_note) keyData.push('note=✓');
+                    if (d.has_stack) keyData.push('stack=✓');
+                    if (d.has_event) keyData.push('event=✓');
+                    md += '| ' + (st.name||'') + ' | ' + (st.status||'') + ' | ' + (st.duration_ms||0) + 'ms | ' + modelStr + ' | ' + tokenStr + ' | ' + keyData.join(', ') + ' |\n';
+                });
+                md += '\n';
+            }
+        });
+    }
+
+    md += '\n---\n\n';
+    md += '## 📥 Detailed Entries\n\n';
+    s.entries.forEach((e, i) => {
+        md += '### Entry ' + (i+1) + ': ' + (e.timestamp||'') + ' — ' + (e.method||'POST') + ' ' + e.status_code + '\n\n';
+        md += '- **Summary:** ' + (e.summary||'') + '\n';
+        md += '- **Action:** ' + (e.action||'none') + '\n';
+        md += '- **Mode:** ' + (e.mode||'voice-command') + '\n';
+        md += '- **Duration:** ' + (e.duration_ms||0) + 'ms\n';
+        md += '- **Path:** `' + (e.path||'') + '`\n\n';
+        if (e.request && e.request.form_fields && Object.keys(e.request.form_fields).length > 0) {
+            md += '**Request Fields:**\n';
+            Object.entries(e.request.form_fields).forEach(([k,v]) => {
+                if (v && v !== 'None' && v !== 'null') md += '- `' + k + '`: ' + (String(v).substring(0,200)) + '\n';
+            });
+            md += '\n';
+        }
+        if (e.response && e.response.body) {
+            md += '**Response Body:**\n```json\n' + JSON.stringify(e.response.body, null, 2).substring(0,2000) + '\n```\n\n';
+        }
+    });
+
+    // LLM usage summary
+    md += '\n---\n\n## 🤖 LLM Usage Summary\n\n';
+    const allStages = [];
+    Object.values(s.pipelineTraces).forEach(t => { if (t.stages) allStages.push(...t.stages); });
+    const llmStages = allStages.filter(st => st.data && st.data.model);
+    if (llmStages.length > 0) {
+        let totalPrompt = 0, totalCompletion = 0, totalTokens = 0;
+        const models = new Set();
+        llmStages.forEach(st => {
+            if (st.data.prompt_tokens) totalPrompt += st.data.prompt_tokens;
+            if (st.data.completion_tokens) totalCompletion += st.data.completion_tokens;
+            if (st.data.total_tokens) totalTokens += st.data.total_tokens;
+            if (st.data.model) models.add(st.data.model);
+        });
+        md += '| Model | Provider | Calls | Prompt Tokens | Completion Tokens | Total Tokens |\n';
+        md += '|-------|----------|-------|---------------|-------------------|-------------|\n';
+        const modelMap = {};
+        llmStages.forEach(st => {
+            const key = st.data.model||'?';
+            if (!modelMap[key]) modelMap[key] = { provider: st.data.provider||'?', calls: 0, prompt: 0, comp: 0, total: 0 };
+            modelMap[key].calls++;
+            modelMap[key].prompt += st.data.prompt_tokens||0;
+            modelMap[key].comp += st.data.completion_tokens||0;
+            modelMap[key].total += st.data.total_tokens||0;
+        });
+        Object.entries(modelMap).forEach(([model, info]) => {
+            md += '| ' + model + ' | ' + info.provider + ' | ' + info.calls + ' | ' + info.prompt.toLocaleString() + ' | ' + info.comp.toLocaleString() + ' | ' + info.total.toLocaleString() + ' |\n';
+        });
+        md += '\n**Totals:** ' + totalPrompt.toLocaleString() + ' prompt + ' + totalCompletion.toLocaleString() + ' completion = **' + totalTokens.toLocaleString() + ' tokens**\n';
+    } else {
+        md += '*No LLM metadata captured.*\n';
+    }
+
+    return md;
+}
+
+function buildCSVExport(s) {
+    // CSV of entries with pipeline data
+    let csv = 'Index,Timestamp,Method,Path,StatusCode,DurationMs,Action,Mode,PipelineStatus,Summary,TranscriptPreview,HasTrace,LLMModels,TotalTokens\n';
+    s.entries.forEach((e, i) => {
+        const trace = e.pipeline_trace || s.pipelineTraces[e.id];
+        const traceModels = [];
+        let traceTokens = 0;
+        if (trace && trace.stages) {
+            trace.stages.forEach(st => {
+                if (st.data && st.data.model && !traceModels.includes(st.data.model)) traceModels.push(st.data.model);
+                if (st.data && st.data.total_tokens) traceTokens += st.data.total_tokens;
+            });
+        }
+        const row = [
+            i+1,
+            '"'+(e.timestamp||'').replace(/"/g,'""')+'"',
+            '"'+(e.method||'POST')+'"',
+            '"'+(e.path||'').replace(/"/g,'""')+'"',
+            e.status_code,
+            e.duration_ms||0,
+            '"'+(e.action||'').replace(/"/g,'""')+'"',
+            '"'+(e.mode||'').replace(/"/g,'""')+'"',
+            '"'+(e.pipeline_status||'').replace(/"/g,'""')+'"',
+            '"'+(e.summary||'').replace(/"/g,'""').substring(0,200)+'"',
+            '"'+((e.request&&e.request.body&&e.request.body.transcript_preview)||'').replace(/"/g,'""').substring(0,200)+'"',
+            trace ? 'Yes' : 'No',
+            '"'+traceModels.join('; ')+'"',
+            traceTokens
+        ];
+        csv += row.join(',') + '\n';
+    });
+    return csv;
+}
+
+function buildTXTExport(s) {
+    let txt = '=== ' + (s.name||'Session') + ' ===\n';
+    txt += 'Exported: ' + new Date().toISOString() + '\n';
+    txt += 'Entries: ' + s.entries.length + ' | Traces: ' + Object.keys(s.pipelineTraces).length + '\n';
+    txt += '='.repeat(60) + '\n\n';
+
+    s.entries.forEach((e, i) => {
+        txt += '--- Entry ' + (i+1) + ' ---\n';
+        txt += 'Time: ' + (e.timestamp||'') + '\n';
+        txt += 'Method: ' + (e.method||'POST') + ' | Status: ' + e.status_code + ' | Duration: ' + (e.duration_ms||0) + 'ms\n';
+        txt += 'Action: ' + (e.action||'none') + ' | Mode: ' + (e.mode||'') + '\n';
+        txt += 'Summary: ' + (e.summary||'') + '\n';
+        txt += 'Pipeline: ' + (e.pipeline_status||'none') + '\n';
+
+        const trace = e.pipeline_trace || s.pipelineTraces[e.id];
+        if (trace && trace.stages) {
+            txt += 'Pipeline Stages:\n';
+            trace.stages.forEach(st => {
+                const d = st.data || {};
+                txt += '  [' + (st.status||'?') + '] ' + (st.name||'?') + ' (' + (st.duration_ms||0) + 'ms)';
+                if (d.model) txt += ' | model=' + d.model;
+                if (d.total_tokens) txt += ' | tokens=' + d.total_tokens;
+                txt += '\n';
+            });
+        }
+        txt += '\n';
+    });
+
+    return txt;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Import
+// ═══════════════════════════════════════════════════════════════════════════
+
+function importSession(fileInput) {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            if (!data._exportVersion || !data.entries) {
+                alert('Invalid session file format. Expected exported JSON session file.');
+                return;
+            }
+            // Create a new imported session tab
+            const s = createSession(data.sessionName || file.name.replace(/\.json$/,''), false, file.name);
+            s.entries = data.entries || [];
+            s.pipelineTraces = data.pipelineTraces || {};
+            s.createdAt = data.exportedAt || new Date().toISOString();
+            activeSessionId = s.id;
+            renderTabBar();
+            updateStats();
+            renderList(false);
+            document.getElementById('detailPanel').innerHTML = '<div class="detail-empty"><div style="font-size:3rem">📥</div><div>Imported ' + s.entries.length + ' entries from ' + esc(file.name) + '</div><div style="font-size:.75rem;color:#484f58">Select a request to inspect</div></div>';
+        } catch(err) {
+            alert('Failed to parse file: ' + err.message);
+        }
+    };
+    reader.readAsText(file);
+    fileInput.value = ''; // Reset so same file can be re-imported
+}
+
+// Also export a full JSON backup (for import) alongside other formats
+function exportSessionJSON() {
+    const s = getActiveSession();
+    if (!s || s.entries.length === 0) { alert('No entries to export.'); return; }
+    const data = {
+        _exportVersion: 1,
+        sessionName: s.name,
+        exportedAt: new Date().toISOString(),
+        entries: s.entries,
+        pipelineTraces: s.pipelineTraces,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = (s.name||'session').replace(/[^a-zA-Z0-9_-]/g,'_') + '.json';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Attach JSON export to the export button group
+function addJSONExportButton() {
+    const group = document.querySelector('.export-btn-group');
+    if (group && !document.getElementById('exportJsonBtn')) {
+        const btn = document.createElement('button');
+        btn.id = 'exportJsonBtn';
+        btn.style.color = '#e1e4e8';
+        btn.textContent = '💾 .json';
+        btn.title = 'Export full session (for re-import)';
+        btn.onclick = exportSessionJSON;
+        group.appendChild(btn);
+    }
 }
 
 // ── Pipeline Visualization ──
@@ -489,6 +1193,18 @@ const PIPELINE_FLOW = [
     { id: 'synthesizer', label: 'Synthesizer', icon: '🔗' },
     { id: 'resolver', label: 'Resolver', icon: '🎯' },
     { id: 'reflection', label: 'Reflection', icon: '🪞' },
+];
+
+const RECORDS_PIPELINE_FLOW = [
+    { id: 'stt', label: 'STT\nTranscribe', icon: '🎙️' },
+    { id: 'records_experts', label: 'Extraction', icon: '🧠', isGroup: true, children: [
+        { id: 'summarize_expert', label: 'Summary', icon: '📝' },
+        { id: 'note_expert', label: 'Note', icon: '📄' },
+        { id: 'task_expert', label: 'Tasks', icon: '✅' },
+        { id: 'stack_expert', label: 'Stack', icon: '📊' },
+        { id: 'calendar_expert', label: 'Calendar', icon: '📅' },
+    ]},
+    { id: 'assemble', label: 'Assemble\nResponse', icon: '📦' },
 ];
 
 function getStageStatus(stages, stageId) {
@@ -508,9 +1224,13 @@ function getStageData(stages, stageId) {
     return match ? match.data : {};
 }
 
-function renderPipelineViz(trace) {
+function renderPipelineViz(trace, mode) {
+    const isRecords = mode === 'automate';
+    const flow = isRecords ? RECORDS_PIPELINE_FLOW : PIPELINE_FLOW;
+    const title = isRecords ? '🤖 Records Automation Pipeline' : '🔬 AI Voice Pipeline';
+
     if (!trace || !trace.stages || trace.stages.length === 0) {
-        return '<div class="pipeline-viz"><div class="viz-header">🔬 AI Pipeline <span class="viz-status" style="background:#21262d;color:#8b949e">No trace data</span></div><div class="pipeline-stages"><span style="color:#484f58;padding:12px">Pipeline trace not available — make a request to see pipeline execution</span></div></div>';
+        return '<div class="pipeline-viz"><div class="viz-header">'+title+' <span class="viz-status" style="background:#21262d;color:#8b949e">No trace data</span></div><div class="pipeline-stages"><span style="color:#484f58;padding:12px">Pipeline trace not available — make a request to see pipeline execution</span></div></div>';
     }
 
     const stages = trace.stages;
@@ -519,14 +1239,14 @@ function renderPipelineViz(trace) {
     const ctx = trace.context_type ? ' ['+trace.context_type+']' : '';
 
     let vizHTML = '<div class="pipeline-viz">';
-    vizHTML += '<div class="viz-header">🔬 AI Pipeline'+ctx+' <span class="viz-status '+statusClass+'">' + traceStatus.toUpperCase() + '</span><span style="margin-left:auto;font-size:.7rem;color:#8b949e">'+(trace.total_duration_ms||'?')+'ms total</span></div>';
+    vizHTML += '<div class="viz-header">'+title+' <span class="viz-status '+statusClass+'">' + traceStatus.toUpperCase() + '</span><span style="margin-left:auto;font-size:.7rem;color:#8b949e">'+(trace.total_duration_ms||'?')+'ms total</span></div>';
     vizHTML += '<div class="pipeline-stages">';
 
-    for (let i = 0; i < PIPELINE_FLOW.length; i++) {
-        const node = PIPELINE_FLOW[i];
+    for (let i = 0; i < flow.length; i++) {
+        const node = flow[i];
 
         if (i > 0) {
-            const prevNode = PIPELINE_FLOW[i-1];
+            const prevNode = flow[i-1];
             const prevStatus = getStageStatus(stages, prevNode.id);
             vizHTML += '<div class="pipeline-connector'+(prevStatus==='passed'?' active':'')+'">→</div>';
         }
@@ -546,10 +1266,18 @@ function renderPipelineViz(trace) {
             for (const child of node.children) {
                 const cs = getStageStatus(stages, child.id);
                 const cd = getStageData(stages, child.id);
-                let tooltip = child.label + ': ' + cs;
-                if (cd.risk) tooltip += ' risk='+cd.risk;
-                if (cd.confidence !== undefined) tooltip += ' conf='+Math.round(cd.confidence*100)+'%';
-                if (cd.language) tooltip += ' lang='+cd.language;
+                let tooltip = child.label.replace(/\\n/g,' ') + ': ' + cs;
+                if (cd.risk) tooltip += ' | risk='+cd.risk;
+                if (cd.confidence !== undefined) tooltip += ' | conf='+Math.round(cd.confidence*100)+'%';
+                if (cd.language) tooltip += ' | lang='+cd.language;
+                if (cd.has_summary) tooltip += ' | summary='+(cd.summary_preview||'').substring(0,40);
+                if (cd.has_note) tooltip += ' | note='+(cd.note_title||'').substring(0,30);
+                if (cd.task_count !== undefined) tooltip += ' | tasks='+cd.task_count;
+                if (cd.has_stack) tooltip += ' | stack='+(cd.stack_name||'').substring(0,30);
+                if (cd.has_event) tooltip += ' | event='+(cd.event_title||'').substring(0,30);
+                if (cd.input_len) tooltip += ' | in='+cd.input_len+'c';
+                if (cd.model) tooltip += ' | model='+cd.model;
+                if (cd.total_tokens) tooltip += ' | '+cd.total_tokens+' tok';
                 vizHTML += '<div class="pipeline-stage" title="'+esc(tooltip)+'">';
                 vizHTML += '<div class="stage-dot '+cs+'">'+child.icon+'</div>';
                 vizHTML += '<div class="stage-label'+(cs!=='pending'?' active':'')+'">'+esc(child.label)+'</div>';
@@ -559,11 +1287,24 @@ function renderPipelineViz(trace) {
         } else {
             const ss = getStageStatus(stages, node.id);
             const sd = getStageData(stages, node.id);
-            let tooltip = node.label.replace('\n',' ') + ': ' + ss;
-            if (sd.safe !== undefined) tooltip += ' safe='+sd.safe;
-            if (sd.complexity) tooltip += ' ('+sd.complexity+')';
-            if (sd.action) tooltip += ' → '+sd.action;
-            if (sd.score !== undefined) tooltip += ' score='+Math.round(sd.score*100)+'%';
+            let tooltip = node.label.replace(/\\n/g,' ') + ': ' + ss;
+            if (sd.safe !== undefined) tooltip += ' | safe='+sd.safe;
+            if (sd.complexity) tooltip += ' | '+sd.complexity;
+            if (sd.action) tooltip += ' | → '+sd.action;
+            if (sd.score !== undefined) tooltip += ' | score='+Math.round(sd.score*100)+'%';
+            if (sd.steps !== undefined) tooltip += ' | steps='+sd.steps;
+            if (sd.transcript_len) tooltip += ' | transcript='+sd.transcript_len+'c';
+            if (sd.summary_preview) tooltip += ' | summary='+(sd.summary_preview||'').substring(0,40);
+            if (sd.task_count !== undefined) tooltip += ' | tasks='+sd.task_count;
+            if (sd.has_note) tooltip += ' | note=✓';
+            if (sd.has_stack) tooltip += ' | stack='+(sd.stack_name||'').substring(0,30);
+            if (sd.has_calendar) tooltip += ' | cal='+(sd.has_calendar?'✓':'✗');
+            if (sd.has_event) tooltip += ' | event='+(sd.event_title||'').substring(0,30);
+            if (sd.experts_combined !== undefined) tooltip += ' | experts='+sd.experts_combined;
+            if (sd.directive_len) tooltip += ' | directive='+sd.directive_len+'c';
+            if (sd.model) tooltip += ' | model='+sd.model;
+            if (sd.total_tokens) tooltip += ' | '+sd.total_tokens+' tok';
+            if (sd.provider) tooltip += ' | via '+sd.provider;
 
             vizHTML += '<div class="pipeline-stage" title="'+esc(tooltip)+'">';
             vizHTML += '<div class="stage-dot '+ss+'">'+node.icon+'</div>';
@@ -581,16 +1322,84 @@ function renderStageDetails(stages) {
     let html = '';
     for (const stage of stages) {
         const stClass = stage.status || 'pending';
-        let dataStr = '';
-        if (stage.data && Object.keys(stage.data).length > 0) {
-            const entries = Object.entries(stage.data).slice(0, 4);
-            dataStr = entries.map(([k,v]) => k+': '+String(v).substring(0,60)).join(' | ');
+        const data = stage.data || {};
+
+        // Build rich data preview based on stage type
+        let dataPreview = '';
+        const name = stage.name;
+
+        // Records pipeline stages
+        if (name === 'stt') {
+            if (data.transcript_len) dataPreview += '<span class="stage-output-badge">out</span>'+data.transcript_len+' chars';
+            if (data.speaker_count) dataPreview += ' | <span class="stage-output-badge">spk</span>'+data.speaker_count;
+            if (data.mode) dataPreview += ' | mock';
+        } else if (name === 'summarize_expert') {
+            if (data.input_len) dataPreview += '<span class="stage-input-badge">in</span>'+data.input_len+' chars ';
+            dataPreview += '<span class="stage-output-badge">out</span>'+(data.has_summary ? (data.summary_preview||'').substring(0,80)+'…' : 'empty');
+        } else if (name === 'note_expert') {
+            if (data.input_len) dataPreview += '<span class="stage-input-badge">in</span>'+data.input_len+' chars ';
+            dataPreview += '<span class="stage-output-badge">out</span>'+(data.has_note ? '✓ '+esc(data.note_title||'') : '✗ none');
+        } else if (name === 'task_expert') {
+            if (data.input_len) dataPreview += '<span class="stage-input-badge">in</span>'+data.input_len+' chars ';
+            dataPreview += '<span class="stage-output-badge">out</span>'+data.task_count+' tasks' + (data.first_task ? ': '+esc(data.first_task).substring(0,60) : '');
+        } else if (name === 'stack_expert') {
+            if (data.input_len) dataPreview += '<span class="stage-input-badge">in</span>'+data.input_len+' chars ';
+            dataPreview += '<span class="stage-output-badge">out</span>'+(data.has_stack ? '✓ '+esc(data.stack_name||'')+' ('+data.col_count+'c×'+data.row_count+'r)' : '✗ none');
+        } else if (name === 'calendar_expert') {
+            if (data.input_len) dataPreview += '<span class="stage-input-badge">in</span>'+data.input_len+' chars ';
+            dataPreview += '<span class="stage-output-badge">out</span>'+(data.has_event ? '✓ '+esc(data.event_title||'') : '✗ none');
+        } else if (name === 'assemble') {
+            dataPreview += '<span class="stage-output-badge">out</span>';
+            if (data.summary_preview) dataPreview += 'summary: '+esc(data.summary_preview).substring(0,60)+'…';
+            dataPreview += ' | tasks:'+(data.task_count||0)+' note:'+(data.has_note?'yes':'no')+' stack:'+(data.has_stack?'yes':'no')+' cal:'+(data.has_calendar?'yes':'no');
         }
+        // Voice pipeline stages
+        else if (name === 'safety_gate') {
+            dataPreview += '<span class="stage-output-badge">out</span>safe='+data.safe;
+            if (data.reason) dataPreview += ' reason='+esc(String(data.reason).substring(0,50));
+        } else if (name === 'complexity_router') {
+            dataPreview += '<span class="stage-output-badge">out</span>'+esc(data.complexity||'?');
+            if (data.reasoning) dataPreview += ' '+esc(String(data.reasoning).substring(0,50));
+        } else if (name === 'planner') {
+            dataPreview += '<span class="stage-output-badge">out</span>steps='+(data.steps||0)+' multi='+data.multi_step;
+            if (data.fallback) dataPreview += ' fallback='+data.fallback;
+        } else if (name === 'contrarian_expert') {
+            dataPreview += '<span class="stage-output-badge">out</span>risk='+esc(data.risk||'?');
+            if (data.critique) dataPreview += ' '+esc(String(data.critique).substring(0,60));
+        } else if (name === 'research_expert') {
+            dataPreview += '<span class="stage-output-badge">out</span>conf='+Math.round((data.confidence||0)*100)+'%';
+            if (data.web_search) dataPreview += ' web:'+data.web_results+' results';
+            if (data.data_gaps && data.data_gaps.length) dataPreview += ' gaps:'+data.data_gaps.length;
+        } else if (name === 'conversation_expert') {
+            dataPreview += '<span class="stage-output-badge">out</span>lang='+esc(data.language||'?')+' tone='+esc(data.tone||'?');
+            if (data.intent) dataPreview += ' intent='+esc(String(data.intent).substring(0,50));
+        } else if (name === 'synthesizer') {
+            dataPreview += '<span class="stage-output-badge">out</span>experts='+(data.experts_combined||0)+' plan='+(data.has_plan?'yes':'no')+' directive='+(data.directive_len||0)+' chars';
+        } else if (name && name.startsWith('resolver')) {
+            dataPreview += '<span class="stage-output-badge">out</span>action='+esc(data.action||'?');
+            if (data.has_reply) dataPreview += ' +reply';
+            if (data.refinement) dataPreview += ' (refine#'+data.refinement+')';
+        } else if (name === 'reflection') {
+            dataPreview += '<span class="stage-output-badge">out</span>score='+Math.round((data.score||0)*100)+'%';
+            if (data.needs_refinement) dataPreview += ' needs_refine';
+            if (data.issues_count) dataPreview += ' issues:'+data.issues_count;
+        } else {
+            // Generic fallback
+            if (data && Object.keys(data).length > 0) {
+                const entries = Object.entries(data).slice(0, 4);
+                dataPreview = entries.map(([k,v]) => k+': '+String(v).substring(0,60)).join(' | ');
+            }
+        }
+
         html += '<div class="stage-detail-item">';
         html += '<div class="stage-status-dot '+stClass+'"></div>';
         html += '<span class="stage-name">'+esc(stage.name)+'</span>';
-        html += '<span class="stage-data">'+esc(dataStr)+'</span>';
-        html += '<span class="stage-dur">'+stage.duration_ms+'ms</span>';
+        html += '<span class="stage-data">'+dataPreview+'</span>';
+        // Model/token badges
+        if (data.model) html += '<span class="model-badge" title="Model">'+esc(data.model)+'</span>';
+        if (data.provider) html += '<span class="provider-badge" title="Provider">'+esc(data.provider)+'</span>';
+        if (data.total_tokens) html += '<span class="token-badge" title="Prompt: '+data.prompt_tokens+' | Completion: '+data.completion_tokens+'">'+data.total_tokens+' tok</span>';
+        html += '<span class="stage-dur">'+(stage.duration_ms||0)+'ms</span>';
         html += '</div>';
     }
     return html;
@@ -647,6 +1456,200 @@ function toggleSection(h) {
     if(b){b.classList.toggle('collapsed'); if(a)a.classList.toggle('open');}
 }
 
+function renderDataFlow(trace, mode, respBody) {
+    if (!trace || !trace.stages || trace.stages.length === 0) return '';
+
+    const isRecords = mode === 'automate';
+    const stages = trace.stages;
+
+    // Build a step-by-step data flow trace
+    let html = '';
+    let stepNum = 0;
+
+    for (let i = 0; i < stages.length; i++) {
+        const stage = stages[i];
+        const stClass = stage.status || 'pending';
+        const data = stage.data || {};
+        const name = stage.name;
+        stepNum++;
+
+        // Build input/output description for each stage
+        let ioHTML = '';
+        if (name === 'stt') {
+            ioHTML = '<div class="flow-io-label">Input: audio bytes</div>';
+            if (data.transcript_len) ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">'+data.transcript_len+' chars transcript</span></div>';
+            if (data.speaker_count) ioHTML += '<div class="flow-io-label">Speakers: <span class="flow-io-value">'+data.speaker_count+'</span></div>';
+        } else if (name === 'summarize_expert') {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">'+esc((data.input_len||'?')+' chars transcript')+'</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">'+(data.has_summary ? esc(data.summary_preview||'') : '<em>no summary extracted</em>')+'</span></div>';
+        } else if (name === 'note_expert') {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">'+esc((data.input_len||'?')+' chars transcript')+'</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">'+(data.has_note ? 'Note: "'+esc(data.note_title||'')+'" ('+data.content_len+' chars)' : '<em>no note</em>')+'</span></div>';
+        } else if (name === 'task_expert') {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">'+esc((data.input_len||'?')+' chars transcript')+'</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">'+data.task_count+' task(s)'+(data.first_task ? ' — "'+esc(data.first_task)+'"' : '')+'</span></div>';
+        } else if (name === 'stack_expert') {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">'+esc((data.input_len||'?')+' chars transcript')+'</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">'+(data.has_stack ? 'Stack: "'+esc(data.stack_name||'')+'" ('+data.col_count+' cols × '+data.row_count+' rows)' : '<em>no table data</em>')+'</span></div>';
+        } else if (name === 'calendar_expert') {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">'+esc((data.input_len||'?')+' chars transcript')+'</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">'+(data.has_event ? 'Event: "'+esc(data.event_title||'')+'"'+(data.all_day?' (all-day)':'') : '<em>no event</em>')+'</span></div>';
+        } else if (name === 'assemble') {
+            ioHTML = '<div class="flow-io-label">Input: all 5 expert outputs</div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">Final AutomateResponse</span></div>';
+            if (data.summary_preview) ioHTML += '<div class="flow-io-label">Summary: <span class="flow-io-value">'+esc(data.summary_preview).substring(0,100)+'…</span></div>';
+            ioHTML += '<div class="flow-io-label">Tasks: <span class="flow-io-value">'+(data.task_count||0)+'</span> | Note: <span class="flow-io-value">'+(data.has_note?'yes':'no')+'</span> | Stack: <span class="flow-io-value">'+(data.has_stack?'yes':'no')+'</span> | Calendar: <span class="flow-io-value">'+(data.has_calendar?'yes':'no')+'</span></div>';
+        } else if (name === 'safety_gate') {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">transcript ('+esc(trace.transcript||'')+')</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">'+(data.safe?'✅ SAFE — proceed':'🚫 BLOCKED — '+esc(data.reason||''))+'</span></div>';
+        } else if (name === 'complexity_router') {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">transcript + context_type='+esc(trace.context_type||'')+'</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">complexity='+esc(data.complexity||'?')+' — '+esc(data.reasoning||'')+'</span></div>';
+        } else if (name === 'planner') {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">transcript + context</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">'+data.steps+' step(s), multi_step='+data.multi_step+'</span></div>';
+            if (data.fallback) ioHTML += '<div class="flow-io-label">Fallback: <span class="flow-io-value">'+esc(data.fallback)+'</span></div>';
+        } else if (name === 'contrarian_expert') {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">transcript + execution plan</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">Risk: '+esc(data.risk||'?')+' — '+esc((data.critique||'').substring(0,120))+'</span></div>';
+        } else if (name === 'research_expert') {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">transcript + workspace facts + plan</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">Confidence: '+Math.round((data.confidence||0)*100)+'%'+(data.web_search?' | Web search: '+data.web_results+' results':'')+'</span></div>';
+            if (data.data_gaps && data.data_gaps.length) ioHTML += '<div class="flow-io-label">Data Gaps: <span class="flow-io-value">'+data.data_gaps.length+' found</span></div>';
+            if (data.findings_len) ioHTML += '<div class="flow-io-label">Findings: <span class="flow-io-value">'+data.findings_len+' chars of research</span></div>';
+        } else if (name === 'conversation_expert') {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">transcript + plan + lang/tone pre-analysis</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">Lang='+esc(data.language||'?')+' | Tone='+esc(data.tone||'?')+' | Ambiguity='+(data.has_ambiguity?'YES':'no')+'</span></div>';
+            if (data.intent) ioHTML += '<div class="flow-io-label">Intent: <span class="flow-io-value">'+esc(String(data.intent).substring(0,100))+'</span></div>';
+        } else if (name === 'synthesizer') {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">'+data.experts_combined+' expert outputs'+(data.has_plan?' + execution plan':'')+'</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">Resolver directive ('+data.directive_len+' chars)</span></div>';
+        } else if (name && name.startsWith('resolver')) {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">transcript + directive + context'+(data.refinement?' + reflection feedback':'')+'</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">Action: '+esc(data.action||'?')+(data.has_reply?' + conversational reply':'')+'</span></div>';
+        } else if (name === 'reflection') {
+            ioHTML = '<div class="flow-io-label">Input: <span class="flow-io-value">resolver output</span></div>';
+            ioHTML += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">Score: '+Math.round((data.score||0)*100)+'% | '+(data.needs_refinement?'Needs refinement ('+data.issues_count+' issues)':'Accepted ✅')+'</span></div>';
+        } else {
+            ioHTML = '<div class="flow-io-label">Output: <span class="flow-io-value">'+esc(JSON.stringify(data).substring(0,200))+'</span></div>';
+        }
+
+        // Add model/token info if available
+        if (data.model || data.total_tokens) {
+            ioHTML += '<div class="flow-io-label" style="margin-top:3px">🤖 <span class="flow-io-value highlight">';
+            if (data.model) ioHTML += esc(data.model);
+            if (data.provider) ioHTML += ' via '+esc(data.provider);
+            if (data.total_tokens) ioHTML += ' | '+data.total_tokens+' tokens (in:'+(data.prompt_tokens||0)+' out:'+(data.completion_tokens||0)+')';
+            ioHTML += '</span></div>';
+        }
+
+        html += '<div class="flow-step">';
+        html += '<div class="flow-step-num '+stClass+'">'+(stepNum)+'</div>';
+        html += '<div class="flow-step-info">';
+        html += '<div class="flow-step-name">'+esc(name)+'</div>';
+        html += '<div class="flow-step-io">'+ioHTML+'</div>';
+        html += '</div>';
+        html += '<div class="flow-step-dur">'+(stage.duration_ms||0)+'ms</div>';
+        html += '</div>';
+
+        // Add arrow between steps (except last)
+        if (i < stages.length - 1) {
+            const nextStatus = stages[i+1].status;
+            html += '<div class="flow-arrow'+(stClass==='passed'?' active':'')+'">↓</div>';
+        }
+    }
+
+    // Add final output summary
+    if (isRecords && respBody) {
+        html += '<div class="flow-arrow active">↓</div>';
+        html += '<div class="flow-step">';
+        html += '<div class="flow-step-num passed">✓</div>';
+        html += '<div class="flow-step-info">';
+        html += '<div class="flow-step-name" style="color:#7ee787">Final Response → BFF</div>';
+        html += '<div class="flow-step-io">';
+        html += '<div class="flow-io-label">Output: <span class="flow-io-value highlight">summary='+esc((respBody.summary||'').substring(0,80))+'… | tasks='+(respBody.task_mutations||[]).length+' | note='+(respBody.note_mutation?'✓':'✗')+' | stack='+(respBody.stack_mutation?'✓':'✗')+' | calendar='+(respBody.calendar_mutation?'✓':'✗')+'</span></div>';
+        html += '</div></div></div>';
+    }
+
+    return '<div class="data-flow-section">'+
+        '<div class="flow-header" onclick="toggleFlowSection(this)">'+
+        '<span class="arrow">&#9654;</span>'+
+        '<span>🔗 Data Flow Trace ('+stages.length+' stages)</span>'+
+        '<span style="margin-left:auto;font-size:.7rem;color:#8b949e">Click to expand</span>'+
+        '</div>'+
+        '<div class="data-flow-body collapsed">'+html+'</div>'+
+        '</div>';
+}
+
+function toggleFlowSection(h) {
+    const b = h.nextElementSibling;
+    const a = h.querySelector('.arrow');
+    if(b){b.classList.toggle('collapsed'); if(a)a.classList.toggle('open');}
+}
+
+function renderLLMSummary(trace) {
+    if (!trace || !trace.stages || trace.stages.length === 0) return '';
+    const stages = trace.stages;
+
+    // Collect stages that have LLM metadata
+    const llmStages = stages.filter(s => s.data && (s.data.model || s.data.provider || s.data.total_tokens !== undefined));
+    if (llmStages.length === 0) return '';
+
+    // Compute aggregate
+    let totalPrompt = 0, totalCompletion = 0, totalTokens = 0;
+    const modelsUsed = new Set();
+    const providersUsed = new Set();
+    llmStages.forEach(s => {
+        if (s.data.prompt_tokens) totalPrompt += s.data.prompt_tokens;
+        if (s.data.completion_tokens) totalCompletion += s.data.completion_tokens;
+        if (s.data.total_tokens) totalTokens += s.data.total_tokens;
+        if (s.data.model) modelsUsed.add(s.data.model);
+        if (s.data.provider) providersUsed.add(s.data.provider);
+    });
+
+    let html = '<div class="llm-body">';
+
+    // Per-stage rows
+    llmStages.forEach(s => {
+        const d = s.data;
+        html += '<div class="llm-row">';
+        html += '<span class="llm-stage">'+esc(s.name)+'</span>';
+        html += '<span class="llm-model">'+esc(d.model||'?')+'</span>';
+        html += '<span class="llm-provider">'+esc(d.provider||'?')+'</span>';
+        html += '<span class="llm-tokens">';
+        if (d.prompt_tokens || d.completion_tokens) {
+            html += '<span class="in">'+d.prompt_tokens+'</span> + <span class="out">'+d.completion_tokens+'</span> = ';
+        }
+        html += '<span class="total">'+(d.total_tokens||0)+'</span> tok';
+        html += '</span>';
+        html += '</div>';
+    });
+
+    // Totals row
+    html += '<div class="llm-totals">';
+    html += '<div class="total-item"><span class="total-label">Models:</span><span class="total-value">'+[...modelsUsed].join(', ')+'</span></div>';
+    html += '<div class="total-item"><span class="total-label">Providers:</span><span class="total-value">'+[...providersUsed].join(', ')+'</span></div>';
+    html += '<div class="total-item"><span class="total-label">Total LLM calls:</span><span class="total-value">'+llmStages.length+'</span></div>';
+    html += '<div class="total-item"><span class="total-label">Prompt tokens:</span><span class="total-value">'+totalPrompt.toLocaleString()+'</span></div>';
+    html += '<div class="total-item"><span class="total-label">Completion tokens:</span><span class="total-value">'+totalCompletion.toLocaleString()+'</span></div>';
+    html += '<div class="total-item"><span class="total-label">Total tokens:</span><span class="total-value">'+totalTokens.toLocaleString()+'</span></div>';
+    html += '</div>';
+    html += '</div>';
+
+    return '<div class="llm-summary">'+
+        '<div class="llm-header" onclick="toggleLLMSection(this)">'+
+        '<span class="arrow">&#9654;</span>'+
+        '<span>🤖 LLM Usage ('+llmStages.length+' calls, '+totalTokens.toLocaleString()+' tokens)</span>'+
+        '<span style="margin-left:auto;font-size:.7rem;color:#8b949e">'+[...providersUsed].join(', ')+'</span>'+
+        '</div>'+html+'</div>';
+}
+
+function toggleLLMSection(h) {
+    const b = h.nextElementSibling;
+    const a = h.querySelector('.arrow');
+    if(b){b.classList.toggle('collapsed'); if(a)a.classList.toggle('open');}
+}
+
 function renderDetail(entry) {
     const panel = document.getElementById('detailPanel');
     const req = entry.request || {};
@@ -654,16 +1657,27 @@ function renderDetail(entry) {
     const formFields = req.form_fields || {};
     const audioInfo = req.audio_info;
     const respBody = resp.body || {};
+    const mode = entry.mode || '';
 
     // Look up pipeline trace
     let trace = entry.pipeline_trace;
-    if (!trace) trace = pipelineTraces[entry.id];
+    const s = getActiveSession();
+    if (!trace && s) trace = s.pipelineTraces[entry.id];
 
     const isError = respBody && typeof respBody === 'object' && respBody.error;
+    const isRecords = mode === 'automate';
     let sections = '';
 
     // ── Pipeline Visualization (always on top) ──
-    sections += renderPipelineViz(trace);
+    sections += renderPipelineViz(trace, mode);
+
+    // ── Data Flow Trace (new!) ──
+    if (trace && trace.stages && trace.stages.length > 0) {
+        sections += renderDataFlow(trace, mode, respBody);
+    }
+
+    // ── LLM Usage Summary (model, tokens, provider) ──
+    sections += renderLLMSummary(trace);
 
     // ── Pipeline Stage Details ──
     if (trace && trace.stages && trace.stages.length > 0) {
@@ -704,10 +1718,97 @@ function renderDetail(entry) {
     sections += buildSection('resp-body', '📥 Response: Received Data Package', respFmt, respCT,
         '<div class="code-block'+(isError?' style="color:#f87171"':'')+'">'+hlJSON(respBody)+'</div>', true);
 
+    // ── Records-specific breakdown ──
+    if (isRecords && !isError) {
+        // Summary
+        if (respBody.summary) {
+            sections += buildSection('rec-summary', '📝 Summary', 'json', 'text',
+                '<div class="code-block" style="white-space:pre-wrap;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:.9rem;line-height:1.6">'+esc(respBody.summary)+'</div>', true);
+        }
+
+        // Note Mutation
+        if (respBody.note_mutation) {
+            const nm = respBody.note_mutation;
+            const noteRows = [
+                ['title', nm.title || ''],
+                ['content', (nm.content || '').substring(0, 500) + ((nm.content||'').length > 500 ? '…' : '')],
+                ['folder_id', nm.folder_id || 'null (new note)'],
+            ];
+            sections += buildSection('rec-note', '📄 Note Mutation', 'json', 'note',
+                '<div class="data-grid">'+noteRows.map(([k,v]) => '<div class="row"><div class="key">'+k+'</div><span class="value str">'+esc(v)+'</span></div>').join('')+'</div>', false);
+        } else {
+            sections += buildSection('rec-note', '📄 Note Mutation', 'stage', 'empty',
+                '<div style="padding:12px;color:#484f58;font-size:.8rem">No note extracted from this recording.</div>', false);
+        }
+
+        // Task Mutations
+        const tasks = respBody.task_mutations || [];
+        if (tasks.length > 0) {
+            let taskHTML = '<div style="padding:0">';
+            tasks.forEach((t, i) => {
+                taskHTML += '<div class="stage-detail-item" style="flex-direction:column;align-items:flex-start;gap:4px">';
+                taskHTML += '<strong style="color:#e1e4e8">#'+(i+1)+' '+esc(t.title)+'</strong>';
+                if (t.description) taskHTML += '<span style="color:#8b949e;font-size:.75rem">'+esc(t.description.substring(0,200))+'</span>';
+                taskHTML += '<span style="font-size:.7rem;color:#484f58">status: '+esc(t.status||'TODO')+' | priority: '+esc(t.priority||'MEDIUM')+' | assignee: '+esc(t.assignee||'—')+' | due: '+esc(t.due_date||'—')+'</span>';
+                taskHTML += '</div>';
+            });
+            taskHTML += '</div>';
+            sections += buildSection('rec-tasks', '✅ Task Mutations ('+tasks.length+' tasks)', 'json', 'tasks', taskHTML, true);
+        } else {
+            sections += buildSection('rec-tasks', '✅ Task Mutations', 'stage', 'empty',
+                '<div style="padding:12px;color:#484f58;font-size:.8rem">No tasks extracted.</div>', false);
+        }
+
+        // Stack Mutation
+        if (respBody.stack_mutation) {
+            const sm = respBody.stack_mutation;
+            const cols = (sm.columns || []).map(c => c.name+' ('+c.type+')').join(', ');
+            let stackHTML = '<div class="data-grid">';
+            stackHTML += '<div class="row"><div class="key">stack_name</div><span class="value str">'+esc(sm.stack_name||'')+'</span></div>';
+            stackHTML += '<div class="row"><div class="key">columns</div><span class="value str">'+esc(cols||'none')+'</span></div>';
+            stackHTML += '<div class="row"><div class="key">rows</div><span class="value num">'+(sm.rows||[]).length+' rows</span></div>';
+            stackHTML += '</div>';
+            sections += buildSection('rec-stack', '📊 Stack Mutation', 'json', 'stack', stackHTML, false);
+        } else {
+            sections += buildSection('rec-stack', '📊 Stack Mutation', 'stage', 'empty',
+                '<div style="padding:12px;color:#484f58;font-size:.8rem">No table/stack data extracted.</div>', false);
+        }
+
+        // Calendar Mutation
+        if (respBody.calendar_mutation) {
+            const cm = respBody.calendar_mutation;
+            const calRows = [
+                ['title', cm.title || ''],
+                ['start_at', cm.start_at || ''],
+                ['end_at', cm.end_at || ''],
+                ['all_day', String(cm.all_day || false)],
+                ['notes', cm.notes || '—'],
+            ];
+            sections += buildSection('rec-calendar', '📅 Calendar Mutation', 'json', 'event',
+                '<div class="data-grid">'+calRows.map(([k,v]) => '<div class="row"><div class="key">'+k+'</div><span class="value str">'+esc(v)+'</span></div>').join('')+'</div>', false);
+        } else {
+            sections += buildSection('rec-calendar', '📅 Calendar Mutation', 'stage', 'empty',
+                '<div style="padding:12px;color:#484f58;font-size:.8rem">No calendar event extracted.</div>', false);
+        }
+
+        // Speaker Labels
+        const speakers = respBody.speaker_labels;
+        if (speakers && speakers.length > 0) {
+            let spHTML = '<div class="data-grid">';
+            spHTML += '<div class="row"><div class="key">speaker_count</div><span class="value num">'+speakers.length+'</span></div>';
+            speakers.forEach(sp => {
+                spHTML += '<div class="row"><div class="key">'+esc(sp.speaker)+'</div><span class="value str">'+(sp.segments||[]).length+' segments</span></div>';
+            });
+            spHTML += '</div>';
+            sections += buildSection('rec-speakers', '🎤 Speaker Labels', 'json', 'speakers', spHTML, false);
+        }
+    }
+
     // ── Response: Metadata ──
     const rMeta = [
         ['status_code', String(entry.status_code)],
         ['action', entry.action || respBody.action || '—'],
+        ['mode', mode || 'voice-command'],
         ['duration', String(entry.duration_ms)+'ms'],
         ['timestamp', entry.timestamp || ''],
     ];
@@ -717,49 +1818,11 @@ function renderDetail(entry) {
     panel.innerHTML = sections;
 }
 
-function clearAll() {
-    entries.length = 0;
-    for (const k in pipelineTraces) delete pipelineTraces[k];
-    selectedId = null;
-    document.getElementById('entryList').innerHTML = '<div class="empty-state"><div class="icon">&#9678;</div><div>Waiting for requests...</div></div>';
-    document.getElementById('detailPanel').innerHTML = '<div class="detail-empty"><div style="font-size:3rem">🔍</div><div>Select a request to inspect</div></div>';
-    updateStats();
-}
-
-async function loadExisting() {
-    try {
-        const resp = await fetch('/api/live-viewer/entries');
-        const data = await resp.json();
-        for (const summ of data) {
-            const dr = await fetch('/api/live-viewer/entries/'+summ.id);
-            if (dr.ok) {
-                const full = await dr.json();
-                if (!entries.find(e => e.id === full.id)) {
-                    entries.push(full);
-                    if (full.pipeline_trace) {
-                        pipelineTraces[full.pipeline_trace.id || full.id] = full.pipeline_trace;
-                    }
-                }
-            }
-        }
-        updateStats(); renderList(true);
-    } catch(err) { console.error('loadExisting:', err); }
-
-    // Load pipeline traces
-    try {
-        const tr = await fetch('/api/live-viewer/pipeline/traces');
-        const traces = await tr.json();
-        for (const t of traces) {
-            if (!pipelineTraces[t.id]) pipelineTraces[t.id] = t;
-        }
-        document.getElementById('traceCount').textContent = Object.keys(pipelineTraces).length;
-    } catch(err) { console.error('loadTraces:', err); }
-}
-
 // ── Init ──
 loadExisting();
 connectSSE();
 connectPipelineSSE();
+addJSONExportButton();
 </script>
 </body>
 </html>

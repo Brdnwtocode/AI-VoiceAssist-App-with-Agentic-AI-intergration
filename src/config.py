@@ -37,6 +37,13 @@ EXPERT_TIMEOUT = 15.0  # Experts should be fast — tight timeout
 
 LLM_TIMEOUT = 30.0
 
+# ── Records Automation Config ─────────────────────────────────────────────
+# Extraction model for long-audio batch processing.
+# Uses the existing openrouter/openai/gpt-oss-120b:free model (120B params)
+# for structured extraction of notes, tasks, stacks, calendar events, and summaries.
+RECORDS_EXTRACTOR_MODEL = "openrouter/openai/gpt-oss-120b:free"
+RECORDS_EXTRACTOR_TIMEOUT = 120.0  # Long transcripts may need more time
+
 # ── Neon PostgreSQL (long-term memory) ──
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 DB_ENABLED = bool(DATABASE_URL and DATABASE_URL != "postgresql://neondb_owner:your_password@ep-your-project.us-east-2.aws.neon.tech/neondb?sslmode=require")
@@ -114,5 +121,7 @@ app.add_middleware(
 )
 
 from .routes import register_routes
+from .records_routes import register_records_routes
 
 register_routes(app)
+register_records_routes(app)

@@ -37,13 +37,14 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           port: 22
-          envs: OPENAI_API_KEY,ALLOWED_ORIGINS,SONIOX_API_KEY,DEEPGRAM_API_KEY,GROQ_API_KEY,GEMINI_API_KEY,OPENROUTER_API_KEY,DATABASE_URL
+          envs: OPENAI_API_KEY,ALLOWED_ORIGINS,SONIOX_API_KEY,DEEPGRAM_API_KEY,GROQ_API_KEY,GEMINI_API_KEY,OPENROUTER_API_KEY,DATABASE_URL,GOOGLE_CREDENTIALS_JSON
           script: |
             set -e
             cd /home/${{ secrets.SSH_USERNAME }}/voice-ai-app
@@ -58,6 +59,10 @@ jobs:
             GEMINI_API_KEY="$GEMINI_API_KEY"
             OPENROUTER_API_KEY="$OPENROUTER_API_KEY"
             DATABASE_URL="$DATABASE_URL"
+            # Google STT: use inline JSON (no file needed on server)
+            GOOGLE_CREDENTIALS_JSON='${{ secrets.GOOGLE_CREDENTIALS_JSON }}'
+            GOOGLE_STT_ENABLED=true
+            GOOGLE_STT_LANGUAGE=vi-VN
             EOF
             
             # Check if docker is installed, if not, output instructions/error

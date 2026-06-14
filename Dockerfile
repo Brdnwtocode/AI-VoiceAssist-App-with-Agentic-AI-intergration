@@ -17,6 +17,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source directory and config file
+# Note: credentials/ folder is NOT copied — use GOOGLE_CREDENTIALS_JSON env var on EC2
 COPY src/ ./src/
 COPY litellm_config.yaml .
 

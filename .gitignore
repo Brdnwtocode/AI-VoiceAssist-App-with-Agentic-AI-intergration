@@ -157,6 +157,10 @@ ENV/
 env.bak/
 venv.bak/
 
+# Credentials (service account keys, secrets)
+credentials/
+!credentials/.gitkeep
+
 # Spyder project settings
 .spyderproject
 .spyproject
